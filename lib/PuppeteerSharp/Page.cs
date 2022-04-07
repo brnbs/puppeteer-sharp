@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using System.Timers;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -1692,6 +1693,80 @@ namespace PuppeteerSharp
         public Task<Response> WaitForNavigationAsync(NavigationOptions options = null) => FrameManager.WaitForFrameNavigationAsync(FrameManager.MainFrame, options);
 
         /// <summary>
+        /// Waits for Network Idle
+        /// </summary>
+        /// <param name="options">Optional waiting parameters</param>
+        /// <returns>returns Task which resolves when network is idle</returns>
+        /// <example>
+        /// <code>
+        /// <![CDATA[
+        /// page.EvaluateFunctionAsync("() => fetch('some-url')");
+        /// await page.WaitForNetworkIdle(); // The Task resolves after fetch above finishes
+        /// ]]>
+        /// </code>
+        /// </example>
+        public async Task WaitForNetworkIdleAsync(WaitForNetworkIdleOptions options = null)
+        {
+            var timeout = options?.Timeout ?? DefaultTimeout;
+            var idleTime = options?.IdleTime ?? 500;
+
+            var networkIdleTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var idleTimer = new Timer
+            {
+                Interval = idleTime
+            };
+
+            idleTimer.Elapsed += (sender, args) =>
+            {
+                networkIdleTcs.TrySetResult(true);
+            };
+
+            var networkManager = FrameManager.NetworkManager;
+
+            void Evaluate()
+            {
+                idleTimer.Stop();
+
+                if (networkManager.NumRequestsInProgress == 0)
+                {
+                    idleTimer.Start();
+                }
+            }
+
+            void RequestEventListener(object sender, RequestEventArgs e) => Evaluate();
+            void ResponseEventListener(object sender, ResponseCreatedEventArgs e) => Evaluate();
+
+            void Cleanup()
+            {
+                idleTimer.Stop();
+                idleTimer.Dispose();
+
+                networkManager.Request -= RequestEventListener;
+                networkManager.Response -= ResponseEventListener;
+            }
+
+            networkManager.Request += RequestEventListener;
+            networkManager.Response += ResponseEventListener;
+
+            Evaluate();
+
+            await Task.WhenAny(networkIdleTcs.Task, SessionClosedTask).WithTimeout(timeout, t =>
+            {
+                Cleanup();
+
+                return new TimeoutException($"Timeout of {t.TotalMilliseconds} ms exceeded");
+            }).ConfigureAwait(false);
+
+            Cleanup();
+
+            if (SessionClosedTask.IsFaulted)
+            {
+                await SessionClosedTask.ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
         /// Waits for a request.
         /// </summary>
         /// <example>
@@ -1928,6 +2003,40 @@ namespace PuppeteerSharp
             catch (Exception ex) when (ex.Message.Contains("Invalid timezone"))
             {
                 throw new PuppeteerException($"Invalid timezone ID: {timezoneId}");
+            }
+        }
+
+        /// <summary>
+        /// Emulates the idle state.
+        /// If no arguments set, clears idle state emulation.
+        /// </summary>
+        /// <example>
+        /// <code>
+        /// // set idle emulation
+        /// await page.EmulateIdleStateAsync(new EmulateIdleOverrides() {IsUserActive = true, IsScreenUnlocked = false});
+        /// // do some checks here
+        /// ...
+        /// // clear idle emulation
+        /// await page.EmulateIdleStateAsync();
+        /// </code>
+        /// </example>
+        /// <param name="overrides">Overrides</param>
+        /// <returns>A task that resolves when the message has been sent to the browser.</returns>
+        public async Task EmulateIdleStateAsync(EmulateIdleOverrides overrides = null)
+        {
+            if (overrides != null)
+            {
+                await Client.SendAsync(
+                    "Emulation.setIdleOverride",
+                    new EmulationSetIdleOverrideRequest
+                    {
+                        IsUserActive = overrides.IsUserActive,
+                        IsScreenUnlocked = overrides.IsScreenUnlocked,
+                    }).ConfigureAwait(false);
+            }
+            else
+            {
+                await Client.SendAsync("Emulation.clearIdleOverride").ConfigureAwait(false);
             }
         }
 
@@ -2586,9 +2695,6 @@ namespace PuppeteerSharp
         /// calling <see cref="DisposeAsync"/>, you must release all references to the <see cref="Page"/> so
         /// the garbage collector can reclaim the memory that the <see cref="Page"/> was occupying.</remarks>
         /// <returns>ValueTask</returns>
-        public ValueTask DisposeAsync() => new ValueTask(CloseAsync()
-            .ContinueWith(
-                _ => _screenshotTaskQueue.DisposeAsync(),
-                TaskScheduler.Default));
+        public ValueTask DisposeAsync() => new ValueTask(CloseAsync());
     }
 }
