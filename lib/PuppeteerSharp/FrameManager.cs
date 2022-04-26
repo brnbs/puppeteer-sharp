@@ -36,8 +36,6 @@ namespace PuppeteerSharp
             Client.MessageReceived += Client_MessageReceived;
         }
 
-        #region Properties
-
         internal event EventHandler<FrameEventArgs> FrameAttached;
 
         internal event EventHandler<FrameEventArgs> FrameDetached;
@@ -57,9 +55,7 @@ namespace PuppeteerSharp
         internal Page Page { get; }
 
         internal TimeoutSettings TimeoutSettings { get; }
-        #endregion
 
-        #region Public Methods
         internal static async Task<FrameManager> CreateFrameManagerAsync(
             CDPSession client,
             Page page,
@@ -161,10 +157,6 @@ namespace PuppeteerSharp
                 return watcher.NavigationResponse;
             }
         }
-
-        #endregion
-
-        #region Private Methods
 
         private async void Client_MessageReceived(object sender, MessageEventArgs e)
         {
@@ -329,7 +321,7 @@ namespace PuppeteerSharp
                 else
                 {
                     // Initial main frame navigation.
-                    frame = new Frame(this, Client, null, framePayload.Id);
+                    frame = new Frame(this, null, framePayload.Id);
                 }
                 _asyncFrames.AddItem(framePayload.Id, frame);
                 MainFrame = frame;
@@ -374,7 +366,7 @@ namespace PuppeteerSharp
             if (!_frames.ContainsKey(frameId) && _frames.ContainsKey(parentFrameId))
             {
                 var parentFrame = _frames[parentFrameId];
-                var frame = new Frame(this, Client, parentFrame, frameId);
+                var frame = new Frame(this, parentFrame, frameId);
                 _frames[frame.Id] = frame;
                 FrameAttached?.Invoke(this, new FrameEventArgs(frame));
             }
@@ -431,7 +423,5 @@ namespace PuppeteerSharp
         internal Task<Frame> GetFrameAsync(string frameId) => _asyncFrames.GetItemAsync(frameId);
 
         internal Task<Frame> TryGetFrameAsync(string frameId) => _asyncFrames.TryGetItemAsync(frameId);
-
-        #endregion
     }
 }

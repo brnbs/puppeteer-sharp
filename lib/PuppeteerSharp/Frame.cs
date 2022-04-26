@@ -39,25 +39,11 @@ namespace PuppeteerSharp
     /// </example>
     public class Frame
     {
-        private readonly CDPSession _client;
-        private readonly List<Frame> _childFrames = new List<Frame>();
+        private readonly List<Frame> _childFrames = new();
 
-        internal string Id { get; set; }
-
-        internal string LoaderId { get; set; }
-
-        internal List<string> LifecycleEvents { get; }
-
-        internal string NavigationURL { get; private set; }
-
-        internal DOMWorld MainWorld { get; }
-
-        internal DOMWorld SecondaryWorld { get; }
-
-        internal Frame(FrameManager frameManager, CDPSession client, Frame parentFrame, string frameId)
+        internal Frame(FrameManager frameManager, Frame parentFrame, string frameId)
         {
             FrameManager = frameManager;
-            _client = client;
             ParentFrame = parentFrame;
             Id = frameId;
 
@@ -72,7 +58,6 @@ namespace PuppeteerSharp
             }
         }
 
-        #region Properties
         /// <summary>
         /// Gets the child frames of the this frame
         /// </summary>
@@ -109,9 +94,18 @@ namespace PuppeteerSharp
         public Frame ParentFrame { get; private set; }
 
         internal FrameManager FrameManager { get; }
-        #endregion
 
-        #region Public Methods
+        internal string Id { get; set; }
+
+        internal string LoaderId { get; set; }
+
+        internal List<string> LifecycleEvents { get; }
+
+        internal string NavigationURL { get; private set; }
+
+        internal DOMWorld MainWorld { get; }
+
+        internal DOMWorld SecondaryWorld { get; }
 
         /// <summary>
         /// Navigates to an url
@@ -604,7 +598,5 @@ namespace PuppeteerSharp
             }
             ParentFrame = null;
         }
-
-        #endregion
     }
 }

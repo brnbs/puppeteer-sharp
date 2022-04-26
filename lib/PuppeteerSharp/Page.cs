@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ using PuppeteerSharp.Messaging;
 using PuppeteerSharp.Mobile;
 using PuppeteerSharp.PageAccessibility;
 using PuppeteerSharp.PageCoverage;
+using Timer = System.Timers.Timer;
 
 namespace PuppeteerSharp
 {
@@ -43,7 +45,7 @@ namespace PuppeteerSharp
         private readonly Dictionary<string, Delegate> _pageBindings;
         private readonly IDictionary<string, Worker> _workers;
         private readonly ILogger _logger;
-        private readonly TaskCompletionSource<bool> _closeCompletedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _closeCompletedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TimeoutSettings _timeoutSettings;
         private readonly ConcurrentDictionary<Guid, TaskCompletionSource<FileChooser>> _fileChooserInterceptors;
         private PageGetLayoutMetricsResponse _burstModeMetrics;
@@ -51,11 +53,32 @@ namespace PuppeteerSharp
         private ScreenshotOptions _screenshotBurstModeOptions;
         private TaskCompletionSource<bool> _sessionClosedTcs;
 
-        private static readonly Dictionary<string, decimal> _unitToPixels = new Dictionary<string, decimal> {
+        private static readonly Dictionary<string, decimal> _unitToPixels = new()
+        {
             { "px", 1 },
             { "in", 96 },
             { "cm", 37.8m },
             { "mm", 3.78m }
+        };
+
+        /// <summary>
+        /// List of supported metrics provided by the <see cref="Metrics"/> event.
+        /// </summary>
+        public static readonly IEnumerable<string> SupportedMetrics = new List<string>
+        {
+            "Timestamp",
+            "Documents",
+            "Frames",
+            "JSEventListeners",
+            "Nodes",
+            "LayoutCount",
+            "RecalcStyleCount",
+            "LayoutDuration",
+            "RecalcStyleDuration",
+            "ScriptDuration",
+            "TaskDuration",
+            "JSHeapUsedSize",
+            "JSHeapTotalSize"
         };
 
         private Page(
@@ -96,11 +119,6 @@ namespace PuppeteerSharp
                 },
                 TaskScheduler.Default);
         }
-
-        /// <summary>
-        /// Chrome DevTools Protocol session.
-        /// </summary>
-        public CDPSession Client { get; }
 
         /// <summary>
         /// Raised when the JavaScript <c>load</c> <see href="https://developer.mozilla.org/en-US/docs/Web/Events/load"/> event is dispatched.
@@ -234,6 +252,11 @@ namespace PuppeteerSharp
         public event EventHandler<PopupEventArgs> Popup;
 
         /// <summary>
+        /// Chrome DevTools Protocol session.
+        /// </summary>
+        public CDPSession Client { get; }
+
+        /// <summary>
         /// This setting will change the default maximum time for the following methods:
         /// - <see cref="GoToAsync(string, NavigationOptions)"/>
         /// - <see cref="GoBackAsync(NavigationOptions)"/>
@@ -328,26 +351,6 @@ namespace PuppeteerSharp
         /// Gets this page's viewport
         /// </summary>
         public ViewPortOptions Viewport { get; private set; }
-
-        /// <summary>
-        /// List of supported metrics provided by the <see cref="Metrics"/> event.
-        /// </summary>
-        public static readonly IEnumerable<string> SupportedMetrics = new List<string>
-        {
-            "Timestamp",
-            "Documents",
-            "Frames",
-            "JSEventListeners",
-            "Nodes",
-            "LayoutCount",
-            "RecalcStyleCount",
-            "LayoutDuration",
-            "RecalcStyleDuration",
-            "ScriptDuration",
-            "TaskDuration",
-            "JSHeapUsedSize",
-            "JSHeapTotalSize"
-        };
 
         /// <summary>
         /// Get the browser the page belongs to.

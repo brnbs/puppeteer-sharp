@@ -14,14 +14,14 @@
     <Rule Id="SA1516" Action="Error" /> <!-- Error SA1516: Elements should be separated by blank line (SA1516)-->
     <Rule Id="SA1629" Action="None" /> <!-- Error SA1629: Documentation text should end with a period (SA1629)-->
     <Rule Id="SA1514" Action="None" /> <!-- Error SA1514: Element documentation header should be preceded by blank line (SA1514)-->
-    <Rule Id="SA1201" Action="None" /> <!-- Error SA1201: A constructor should not follow a property (SA1201)-->
+    <Rule Id="SA1201" Action="Error" /> <!-- Error SA1201: Elements must appear in the correct order (SA1201)-->
     <Rule Id="SA1202" Action="None" /> <!-- Error SA1202: 'public' members should come before 'internal' members (SA1202)-->
     <Rule Id="SA1210" Action="Error" /> <!-- Error SA1210: Using directives should be ordered alphabetically by the namespaces. (SA1210)-->
     <Rule Id="SA1208" Action="Error" /> <!-- Error SA1208: Order usings-->
     <Rule Id="SA1204" Action="None" /> <!-- Error SA1204: Static members should appear before non-static members (SA1204)-->
     <Rule Id="SA1004" Action="None" /> <!-- Error SA1004: Documentation line should begin with a space. (SA1004)-->
     <Rule Id="SA1513" Action="None" /> <!-- Error SA1513: Closing brace should be followed by blank line (SA1513)-->
-    <Rule Id="SA1124" Action="None" /> <!-- Error SA1124: Don't use regions-->
+    <Rule Id="SA1124" Action="Error" /> <!-- Error SA1124: Don't use regions-->
     <Rule Id="SA1009" Action="Error" /> <!-- Error SA1009: Closing parenthesis should not be preceded by a space. (SA1009)-->
     <Rule Id="SA1413" Action="None" /> <!-- Error SA1413: Use trailing comma in multi-line initializers (SA1413)-->
     <Rule Id="SA1602" Action="None" /> <!-- Error SA1602: Enumeration items should be documented (SA1602)-->
