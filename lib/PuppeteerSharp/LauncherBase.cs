@@ -28,10 +28,16 @@ namespace PuppeteerSharp
         /// <param name="options">Options for launching Base.</param>
         public LauncherBase(string executable, LaunchOptions options)
         {
-            _stateManager = new StateManager();
-            _stateManager.Starting = new ChromiumStartingState(_stateManager);
-
             Options = options ?? throw new ArgumentNullException(nameof(options));
+
+            _stateManager = new StateManager();
+            _stateManager.Starting = options.Product switch
+            {
+                Product.Chrome => new ChromiumStartingState(_stateManager),
+                Product.Firefox => new ChromiumStartingState(_stateManager),
+                Product.FirefoxPlaywright => new FirefoxPlaywrightStartingState(_stateManager),
+                _ => throw new ArgumentException("Invalid product"),
+            };
 
             Process = new Process
             {

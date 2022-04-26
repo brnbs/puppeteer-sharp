@@ -1,7 +1,7 @@
 namespace PuppeteerSharp
 {
     /// <summary>
-    /// Browser to use (Chrome or Firefox).
+    /// Browser to use (Chrome, Firefox or FirefoxPlaywright).
     /// </summary>
     public enum Product
     {
@@ -13,5 +13,9 @@ namespace PuppeteerSharp
         /// Firefox.
         /// </summary>
         Firefox,
+        /// <summary>
+        /// Firefox built by Playwright Team.
+        /// </summary>
+        FirefoxPlaywright,
     }
 }

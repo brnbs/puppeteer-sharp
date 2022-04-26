@@ -60,6 +60,7 @@ namespace PuppeteerSharp
             {
                 Product.Chrome => new ChromiumLauncher(executable, options),
                 Product.Firefox => new FirefoxLauncher(executable, options),
+                Product.FirefoxPlaywright => new FirefoxPlaywrightLauncher(executable, options),
                 _ => throw new ArgumentException("Invalid product"),
             };
 
