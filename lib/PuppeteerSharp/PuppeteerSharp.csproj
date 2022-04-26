@@ -10,7 +10,7 @@
     <PackageTags>headless,chrome,puppeteer</PackageTags>
     <Title>PuppeteerSharp</Title>
     <Description>Headless Browser .NET API</Description>
-    <PackageId>PuppeteerSharp</PackageId>
+    <PackageId>OutisNemo.PuppeteerSharp</PackageId>
     <PackageReleaseNotes></PackageReleaseNotes>
     <PackageVersion>18.0.5</PackageVersion>
     <ReleaseVersion>18.0.5</ReleaseVersion>
