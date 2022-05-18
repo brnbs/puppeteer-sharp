@@ -187,4 +187,6 @@ Support us with a monthly donation and help us continue our activities. [Become 
 
 Thanks to [JetBrains](https://www.jetbrains.com/?from=PuppeteerSharp) for a community Resharper license to use on this project.
 
+# Building a NuGet package for Outis Nemo
 
+`dotnet pack -c Release -p:PackageVersion=7.0.0-$(Get-Date -Format "yyyyMMdd")`
