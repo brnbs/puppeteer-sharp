@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Threading.Tasks;
 using PuppeteerSharp.Tests.Attributes;
@@ -51,6 +51,28 @@ namespace PuppeteerSharp.Tests.PageTests
             Assert.Equal(TestConstants.ServerUrl + "/digits/2.png", task.Result.Url);
         }
 
+        [PuppeteerTest("page.spec.ts", "Page.waitForResponse", "should work with async predicate")]
+        [PuppeteerFact]
+        public async Task ShouldWorkWithAsyncPredicate()
+        {
+            await Page.GoToAsync(TestConstants.EmptyPage);
+            var task = Page.WaitForResponseAsync(async (Response response) =>
+            {
+                await Task.Delay(1);
+                return response.Url == TestConstants.ServerUrl + "/digits/2.png";
+            });
+
+            await Task.WhenAll(
+            task,
+            Page.EvaluateFunctionAsync(@"() => {
+                fetch('/digits/1.png');
+                fetch('/digits/2.png');
+                fetch('/digits/3.png');
+            }")
+            );
+            Assert.Equal(TestConstants.ServerUrl + "/digits/2.png", task.Result.Url);
+        }
+
         [PuppeteerTest("page.spec.ts", "Page.waitForResponse", "should respect timeout")]
         [PuppeteerFact]
         public async Task ShouldRespectTimeout()
@@ -77,7 +99,7 @@ namespace PuppeteerSharp.Tests.PageTests
             Assert.Contains("Timeout of 1 ms exceeded", exception.Message);
         }
 
-        [PuppeteerTest("page.spec.ts", "Page.waitForResponse", "should work with not timeout")]
+        [PuppeteerTest("page.spec.ts", "Page.waitForResponse", "should work with no timeout")]
         [PuppeteerFact]
         public async Task ShouldWorkWithNoTimeout()
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -1212,7 +1212,7 @@ namespace PuppeteerSharp
         /// <remarks>
         /// This method is a shortcut for calling two methods:
         /// <see cref="SetViewportAsync(ViewPortOptions)"/>
-        /// <see cref="SetUserAgentAsync(string)"/>
+        /// <see cref="SetUserAgentAsync(string, UserAgentMetadata)"/>
         /// To aid emulation, puppeteer provides a list of device descriptors which can be obtained via the <see cref="Puppeteer.Devices"/>.
         /// <see cref="EmulateAsync(DeviceDescriptor)"/> will resize the page. A lot of websites don't expect phones to change size, so you should emulate before navigating to the page.
         /// </remarks>
@@ -1523,9 +1523,10 @@ namespace PuppeteerSharp
         /// Sets the user agent to be used in this page
         /// </summary>
         /// <param name="userAgent">Specific user agent to use in this page</param>
+        /// <param name="userAgentData">Specific user agent client hint data to use in this page</param>
         /// <returns>Task</returns>
-        public Task SetUserAgentAsync(string userAgent)
-            => FrameManager.NetworkManager.SetUserAgentAsync(userAgent);
+        public Task SetUserAgentAsync(string userAgent, UserAgentMetadata userAgentData = null)
+            => FrameManager.NetworkManager.SetUserAgentAsync(userAgent, userAgentData);
 
         /// <summary>
         /// Sets extra HTTP headers that will be sent with every request the page initiates
@@ -1860,17 +1861,41 @@ namespace PuppeteerSharp
         /// <returns>A task which resolves when a matching response is received.</returns>
         /// <param name="predicate">Function which looks for a matching response.</param>
         /// <param name="options">Options.</param>
-        public async Task<Response> WaitForResponseAsync(Func<Response, bool> predicate, WaitForOptions options = null)
+        public Task<Response> WaitForResponseAsync(Func<Response, bool> predicate, WaitForOptions options = null)
+            => WaitForResponseAsync((response) => Task.FromResult(predicate(response)), options);
+
+        /// <summary>
+        /// Waits for a response.
+        /// </summary>
+        /// <example>
+        /// <code>
+        /// <![CDATA[
+        /// var response = await page.WaitForResponseAsync(response => response.Url === "http://example.com" && response.Status === HttpStatus.Ok;
+        /// return response.Url;
+        /// ]]>
+        /// </code>
+        /// </example>
+        /// <returns>A task which resolves when a matching response is received.</returns>
+        /// <param name="predicate">Function which looks for a matching response.</param>
+        /// <param name="options">Options.</param>
+        public async Task<Response> WaitForResponseAsync(Func<Response, Task<bool>> predicate, WaitForOptions options = null)
         {
             var timeout = options?.Timeout ?? DefaultTimeout;
             var responseTcs = new TaskCompletionSource<Response>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            void responseEventListener(object sender, ResponseCreatedEventArgs e)
+            async void responseEventListener(object sender, ResponseCreatedEventArgs e)
             {
-                if (predicate(e.Response))
+                try
                 {
-                    responseTcs.TrySetResult(e.Response);
-                    FrameManager.NetworkManager.Response -= responseEventListener;
+                    if (await predicate(e.Response).ConfigureAwait(false))
+                    {
+                        responseTcs.TrySetResult(e.Response);
+                        FrameManager.NetworkManager.Response -= responseEventListener;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    responseTcs.TrySetException(new Exception("Predicated failed", ex));
                 }
             }
 
