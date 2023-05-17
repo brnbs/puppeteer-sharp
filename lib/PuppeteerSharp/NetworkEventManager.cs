@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-
 using PuppeteerSharp.Messaging;
 
 namespace PuppeteerSharp
@@ -25,6 +24,7 @@ namespace PuppeteerSharp
             _queuedEventGroupMap.TryRemove(requestId, out _);
             _queuedRedirectInfoMap.TryRemove(requestId, out _);
             _responseReceivedExtraInfoMap.TryRemove(requestId, out _);
+            _httpRequestsMap.TryRemove(requestId, out _);
         }
 
         internal List<ResponseReceivedExtraInfoResponse> ResponseExtraInfo(string networkRequestId)
@@ -36,17 +36,8 @@ namespace PuppeteerSharp
                     new List<ResponseReceivedExtraInfoResponse>(),
                     (_, __) => new List<ResponseReceivedExtraInfoResponse>());
             }
-            _responseReceivedExtraInfoMap.TryGetValue(networkRequestId, out var result);
-            return result;
-        }
 
-        private List<RedirectInfo> QueuedRedirectInfo(string fetchRequestId)
-        {
-            if (!_queuedRedirectInfoMap.ContainsKey(fetchRequestId))
-            {
-                _queuedRedirectInfoMap.TryAdd(fetchRequestId, new List<RedirectInfo>());
-            }
-            _queuedRedirectInfoMap.TryGetValue(fetchRequestId, out var result);
+            _responseReceivedExtraInfoMap.TryGetValue(networkRequestId, out var result);
             return result;
         }
 
@@ -132,5 +123,16 @@ namespace PuppeteerSharp
         // Puppeteer doesn't have this. but it seems that .NET needs this to avoid race conditions
         internal void ForgetQueuedEventGroup(string networkRequestId)
             => _queuedEventGroupMap.TryRemove(networkRequestId, out _);
+
+        private List<RedirectInfo> QueuedRedirectInfo(string fetchRequestId)
+        {
+            if (!_queuedRedirectInfoMap.ContainsKey(fetchRequestId))
+            {
+                _queuedRedirectInfoMap.TryAdd(fetchRequestId, new List<RedirectInfo>());
+            }
+
+            _queuedRedirectInfoMap.TryGetValue(fetchRequestId, out var result);
+            return result;
+        }
     }
 }

@@ -2,12 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using PuppeteerSharp.Helpers;
 using PuppeteerSharp.States;
 
@@ -22,7 +17,7 @@ namespace PuppeteerSharp
         private readonly StateManager _stateManager;
 
         /// <summary>
-        /// Creates a new <see cref="LauncherBase"/> instance.
+        /// Initializes a new instance of the <see cref="LauncherBase"/> class.
         /// </summary>
         /// <param name="executable">Full path of executable.</param>
         /// <param name="options">Options for launching Base.</param>
@@ -41,7 +36,7 @@ namespace PuppeteerSharp
 
             Process = new Process
             {
-                EnableRaisingEvents = true
+                EnableRaisingEvents = true,
             };
             Process.StartInfo.UseShellExecute = false;
             Process.StartInfo.FileName = executable;
@@ -62,12 +57,6 @@ namespace PuppeteerSharp
         {
             Dispose(false);
         }
-
-        internal TaskCompletionSource<bool> ExitCompletionSource { get; } = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        internal TaskCompletionSource<string> StartCompletionSource { get; } = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        internal LaunchOptions Options { get; }
 
         /// <summary>
         /// Gets Base process details.
@@ -91,6 +80,12 @@ namespace PuppeteerSharp
         /// </summary>
         public bool HasExited => _stateManager.CurrentState.IsExited;
 
+        internal TaskCompletionSource<bool> ExitCompletionSource { get; } = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource<string> StartCompletionSource { get; } = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal LaunchOptions Options { get; }
+
         internal TempDirectory TempUserDataDir { get; set; }
 
         /// <summary>
@@ -106,15 +101,9 @@ namespace PuppeteerSharp
         }
 
         /// <summary>
-        /// Disposes Base process and any temporary user directory.
-        /// </summary>
-        /// <param name="disposing">Indicates whether disposal was initiated by <see cref="Dispose()"/> operation.</param>
-        protected virtual void Dispose(bool disposing) => _stateManager.CurrentState.Dispose(this);
-
-        /// <summary>
         /// Asynchronously starts Base process.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Task which resolves when after start process begins.</returns>
         public Task StartAsync() => _stateManager.CurrentState.StartAsync(this);
 
         /// <summary>
@@ -122,7 +111,7 @@ namespace PuppeteerSharp
         /// Kills the Base process if it has not exited within this period.
         /// </summary>
         /// <param name="timeout">The maximum waiting time for a graceful process exit.</param>
-        /// <returns></returns>
+        /// <returns>Task which resolves when the process is exited or killed.</returns>
         public Task EnsureExitAsync(TimeSpan? timeout) => timeout.HasValue
             ? _stateManager.CurrentState.ExitAsync(this, timeout.Value)
             : _stateManager.CurrentState.KillAsync(this);
@@ -130,7 +119,7 @@ namespace PuppeteerSharp
         /// <summary>
         /// Asynchronously kills Base process.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Task which resolves when the process is killed.</returns>
         public Task KillAsync() => _stateManager.CurrentState.KillAsync(this);
 
         /// <summary>
@@ -158,7 +147,7 @@ namespace PuppeteerSharp
         }
 
         /// <summary>
-        /// Set Env Variables
+        /// Set Env Variables.
         /// </summary>
         /// <param name="environment">The environment.</param>
         /// <param name="customEnv">The customEnv.</param>
@@ -188,5 +177,11 @@ namespace PuppeteerSharp
                 }
             }
         }
+
+        /// <summary>
+        /// Disposes Base process and any temporary user directory.
+        /// </summary>
+        /// <param name="disposing">Indicates whether disposal was initiated by <see cref="Dispose()"/> operation.</param>
+        protected virtual void Dispose(bool disposing) => _stateManager.CurrentState.Dispose(this);
     }
 }

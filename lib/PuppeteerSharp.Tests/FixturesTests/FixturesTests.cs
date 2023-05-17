@@ -20,7 +20,7 @@ namespace PuppeteerSharp.Tests.FixturesTests
         {
             var success = false;
             using var browserFetcher = new BrowserFetcher(Product.Chrome);
-            var process = GetTestAppProcess(
+            using var process = GetTestAppProcess(
                 "PuppeteerSharp.Tests.DumpIO",
                 $"\"{(await browserFetcher.GetRevisionInfoAsync().ConfigureAwait(false)).ExecutablePath}\"");
 
@@ -74,7 +74,7 @@ namespace PuppeteerSharp.Tests.FixturesTests
                 browserClosedTaskWrapper.SetResult(true);
             };
 
-            KillProcess(browser.Launcher.Process.Id);
+            KillProcess(browser.Process.Id);
 
             await browserClosedTaskWrapper.Task;
             Assert.True(browser.IsClosed);
@@ -82,7 +82,7 @@ namespace PuppeteerSharp.Tests.FixturesTests
 
         private void KillProcess(int pid)
         {
-            var process = new Process();
+            using var process = new Process();
 
             //We need to kill the process tree manually
             //See: https://github.com/dotnet/corefx/issues/26234

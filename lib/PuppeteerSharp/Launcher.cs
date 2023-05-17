@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -31,14 +32,14 @@ namespace PuppeteerSharp
         /// <summary>
         /// The method launches a browser instance with given arguments. The browser will be closed when the Browser is disposed.
         /// </summary>
-        /// <param name="options">Options for launching the browser</param>
+        /// <param name="options">Options for launching the browser.</param>
         /// <returns>A connected browser.</returns>
         /// <remarks>
         /// See <a href="https://www.howtogeek.com/202825/what%E2%80%99s-the-difference-between-chromium-and-chrome/">this article</a>
         /// for a description of the differences between Chromium and Chrome.
         /// <a href="https://chromium.googlesource.com/chromium/src/+/lkcr/docs/chromium_browser_vs_google_chrome.md">This article</a> describes some differences for Linux users.
         /// </remarks>
-        public async Task<Browser> LaunchAsync(LaunchOptions options)
+        public async Task<IBrowser> LaunchAsync(LaunchOptions options)
         {
             if (options == null)
             {
@@ -61,14 +62,23 @@ namespace PuppeteerSharp
             {
                 await Process.StartAsync().ConfigureAwait(false);
 
+                Connection connection = null;
                 try
                 {
-                    var connection = await Connection
+                    connection = await Connection
                         .Create(Process.EndPoint, options, _loggerFactory)
                         .ConfigureAwait(false);
 
                     var browser = await Browser
-                        .CreateAsync(connection, Array.Empty<string>(), options.IgnoreHTTPSErrors, options.DefaultViewport, Process, options.TargetFilter)
+                        .CreateAsync(
+                            options.Product,
+                            connection,
+                            Array.Empty<string>(),
+                            options.IgnoreHTTPSErrors,
+                            options.DefaultViewport,
+                            Process,
+                            null,
+                            options.TargetFilter)
                         .ConfigureAwait(false);
 
                     await browser.WaitForTargetAsync(t => t.Type == TargetType.Page).ConfigureAwait(false);
@@ -76,6 +86,7 @@ namespace PuppeteerSharp
                 }
                 catch (Exception ex)
                 {
+                    connection?.Dispose();
                     throw new ProcessException("Failed to create connection", ex);
                 }
             }
@@ -91,7 +102,7 @@ namespace PuppeteerSharp
         /// </summary>
         /// <param name="options">Options for connecting.</param>
         /// <returns>A connected browser.</returns>
-        public async Task<Browser> ConnectAsync(ConnectOptions options)
+        public async Task<IBrowser> ConnectAsync(ConnectOptions options)
         {
             if (options == null)
             {
@@ -105,30 +116,48 @@ namespace PuppeteerSharp
                 throw new PuppeteerException("Exactly one of browserWSEndpoint or browserURL must be passed to puppeteer.connect");
             }
 
+            Connection connection = null;
             try
             {
                 var browserWSEndpoint = string.IsNullOrEmpty(options.BrowserURL)
                     ? options.BrowserWSEndpoint
                     : await GetWSEndpointAsync(options.BrowserURL).ConfigureAwait(false);
 
-                var connection = await Connection.Create(browserWSEndpoint, options, _loggerFactory).ConfigureAwait(false);
+                connection = await Connection.Create(browserWSEndpoint, options, _loggerFactory).ConfigureAwait(false);
+
+                var version = await connection.SendAsync<BrowserGetVersionResponse>("Browser.getVersion").ConfigureAwait(false);
+
+                var product = version.Product.ToLower(CultureInfo.CurrentCulture).Contains("firefox")
+                  ? Product.Firefox
+                  : Product.Chrome;
+
                 var response = await connection.SendAsync<GetBrowserContextsResponse>("Target.getBrowserContexts").ConfigureAwait(false);
                 return await Browser
                     .CreateAsync(
+                        product,
                         connection,
                         response.BrowserContextIds,
                         options.IgnoreHTTPSErrors,
                         options.DefaultViewport,
                         null,
+                        null,
                         options.TargetFilter,
+                        null,
                         options.InitAction)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
+                connection?.Dispose();
                 throw new ProcessException("Failed to create connection", ex);
             }
         }
+
+        /// <summary>
+        /// Gets the executable path.
+        /// </summary>
+        /// <returns>The executable path.</returns>
+        public Task<string> GetExecutablePathAsync() => ResolveExecutablePathAsync();
 
         private async Task<string> GetWSEndpointAsync(string browserURL)
         {
@@ -153,12 +182,6 @@ namespace PuppeteerSharp
             }
         }
 
-        /// <summary>
-        /// Gets the executable path.
-        /// </summary>
-        /// <returns>The executable path.</returns>
-        public Task<string> GetExecutablePathAsync() => ResolveExecutablePathAsync();
-
         private void EnsureSingleLaunchOrConnect()
         {
             if (_processLaunched)
@@ -182,6 +205,7 @@ namespace PuppeteerSharp
             {
                 throw new FileNotFoundException("Failed to launch browser! path to executable does not exist", browserExecutable);
             }
+
             return browserExecutable;
         }
 
@@ -195,6 +219,7 @@ namespace PuppeteerSharp
                 {
                     throw new FileNotFoundException("Tried to use PUPPETEER_EXECUTABLE_PATH env variable to launch browser but did not find any executable", executablePath);
                 }
+
                 return executablePath;
             }
 
@@ -209,13 +234,16 @@ namespace PuppeteerSharp
                 {
                     throw new FileNotFoundException("Tried to use PUPPETEER_CHROMIUM_REVISION env variable to launch browser but did not find executable", revisionInfo.ExecutablePath);
                 }
+
                 return revisionInfo.ExecutablePath;
             }
+
             revisionInfo = await browserFetcher.GetRevisionInfoAsync().ConfigureAwait(false);
             if (!revisionInfo.Local)
             {
                 throw new FileNotFoundException("Process revision is not downloaded. Run BrowserFetcher.DownloadAsync or download the process manually", revisionInfo.ExecutablePath);
             }
+
             return revisionInfo.ExecutablePath;
         }
     }

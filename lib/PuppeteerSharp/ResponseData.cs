@@ -10,7 +10,7 @@ namespace PuppeteerSharp
     public struct ResponseData
     {
         /// <summary>
-        /// Response body (text content)
+        /// Response body (text content).
         /// </summary>
         /// <value>Body as text.</value>
         public string Body
@@ -20,10 +20,11 @@ namespace PuppeteerSharp
         }
 
         /// <summary>
-        /// Response body (binary content)
+        /// Response body (binary content).
         /// </summary>
         /// <value>The body as binary.</value>
         public byte[] BodyData { get; set; }
+
         /// <summary>
         /// Response headers. Header values will be converted to strings. Headers with null values will be
         /// ignored. When multiple headers values are required use an <see cref="System.Collections.ICollection"/>
@@ -31,11 +32,13 @@ namespace PuppeteerSharp
         /// </summary>
         /// <value>Headers.</value>
         public Dictionary<string, object> Headers { get; set; }
+
         /// <summary>
-        /// If set, equals to setting <see href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type"/> response header
+        /// If set, equals to setting <see href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type"/> response header.
         /// </summary>
         /// <value>The Content-Type.</value>
         public string ContentType { get; set; }
+
         /// <summary>
         /// Response status code.
         /// </summary>

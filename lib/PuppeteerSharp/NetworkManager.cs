@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -63,7 +63,7 @@ namespace PuppeteerSharp
             {
                 await _client.SendAsync("Security.setIgnoreCertificateErrors", new SecuritySetIgnoreCertificateErrorsRequest
                 {
-                    Ignore = true
+                    Ignore = true,
                 }).ConfigureAwait(false);
             }
         }
@@ -82,9 +82,10 @@ namespace PuppeteerSharp
             {
                 _extraHTTPHeaders[item.Key.ToLower(CultureInfo.CurrentCulture)] = item.Value;
             }
+
             return _client.SendAsync("Network.setExtraHTTPHeaders", new NetworkSetExtraHTTPHeadersRequest
             {
-                Headers = _extraHTTPHeaders
+                Headers = _extraHTTPHeaders,
             });
         }
 
@@ -101,15 +102,6 @@ namespace PuppeteerSharp
             _emulatedNetworkConditions.Latency = networkConditions?.Latency ?? 0;
             await UpdateNetworkConditionsAsync().ConfigureAwait(false);
         }
-
-        private Task UpdateNetworkConditionsAsync()
-            => _client.SendAsync("Network.emulateNetworkConditions", new NetworkEmulateNetworkConditionsRequest
-            {
-                Offline = _emulatedNetworkConditions.Offline,
-                Latency = _emulatedNetworkConditions.Latency,
-                UploadThroughput = _emulatedNetworkConditions.Upload,
-                DownloadThroughput = _emulatedNetworkConditions.Download,
-            });
 
         internal Task SetUserAgentAsync(string userAgent, UserAgentMetadata userAgentMetadata)
             => _client.SendAsync("Network.setUserAgentOverride", new NetworkSetUserAgentOverrideRequest
@@ -130,10 +122,19 @@ namespace PuppeteerSharp
             return UpdateProtocolRequestInterceptionAsync();
         }
 
+        private Task UpdateNetworkConditionsAsync()
+            => _client.SendAsync("Network.emulateNetworkConditions", new NetworkEmulateNetworkConditionsRequest
+            {
+                Offline = _emulatedNetworkConditions.Offline,
+                Latency = _emulatedNetworkConditions.Latency,
+                UploadThroughput = _emulatedNetworkConditions.Upload,
+                DownloadThroughput = _emulatedNetworkConditions.Download,
+            });
+
         private Task UpdateProtocolCacheDisabledAsync()
             => _client.SendAsync("Network.setCacheDisabled", new NetworkSetCacheDisabledRequest
             {
-                CacheDisabled = _userCacheDisabled
+                CacheDisabled = _userCacheDisabled,
             });
 
         private async void Client_MessageReceived(object sender, MessageEventArgs e)
@@ -195,11 +196,13 @@ namespace PuppeteerSharp
             {
                 EmitResponseEvent(queuedEvents.ResponseReceivedEvent, e);
 
-                if (queuedEvents.LoadingFinishedEvent != null) {
+                if (queuedEvents.LoadingFinishedEvent != null)
+                {
                     OnLoadingFinished(queuedEvents.LoadingFinishedEvent);
                 }
 
-                if (queuedEvents.LoadingFailedEvent != null) {
+                if (queuedEvents.LoadingFailedEvent != null)
+                {
                     OnLoadingFailed(queuedEvents.LoadingFailedEvent);
                 }
 
@@ -241,7 +244,7 @@ namespace PuppeteerSharp
 
             RequestFailed?.Invoke(this, new RequestEventArgs
             {
-                Request = request
+                Request = request,
             });
         }
 
@@ -273,7 +276,7 @@ namespace PuppeteerSharp
 
             RequestFinished?.Invoke(this, new RequestEventArgs
             {
-                Request = request
+                Request = request,
             });
         }
 
@@ -305,7 +308,7 @@ namespace PuppeteerSharp
                 {
                     _networkEventManager.QueuedEventGroup(e.RequestId, new()
                     {
-                        ResponseReceivedEvent = e
+                        ResponseReceivedEvent = e,
                     });
                     return;
                 }
@@ -319,7 +322,6 @@ namespace PuppeteerSharp
             var request = _networkEventManager.GetRequest(e.RequestId);
 
             // FileUpload sends a response without a matching request.
-
             if (request == null)
             {
                 return;
@@ -335,7 +337,7 @@ namespace PuppeteerSharp
 
             Response?.Invoke(this, new ResponseCreatedEventArgs
             {
-                Response = response
+                Response = response,
             });
         }
 
@@ -351,6 +353,7 @@ namespace PuppeteerSharp
                 response = "ProvideCredentials";
                 _attemptedAuthentications.Add(e.RequestId);
             }
+
             var credentials = _credentials ?? new Credentials();
             try
             {
@@ -361,8 +364,8 @@ namespace PuppeteerSharp
                     {
                         Response = response,
                         Username = credentials.Username,
-                        Password = credentials.Password
-                    }
+                        Password = credentials.Password,
+                    },
                 }).ConfigureAwait(false);
             }
             catch (PuppeteerException ex)
@@ -379,7 +382,7 @@ namespace PuppeteerSharp
                 {
                     await _client.SendAsync("Fetch.continueRequest", new FetchContinueRequestRequest
                     {
-                        RequestId = e.RequestId
+                        RequestId = e.RequestId,
                     }).ConfigureAwait(false);
                 }
                 catch (PuppeteerException ex)
@@ -420,7 +423,7 @@ namespace PuppeteerSharp
         private async Task OnRequestAsync(RequestWillBeSentPayload e, string fetchRequestId)
         {
             Request request;
-            var redirectChain = new List<Request>();
+            var redirectChain = new List<IRequest>();
             if (e.RedirectResponse != null)
             {
                 ResponseReceivedExtraInfoResponse redirectResponseExtraInfo = null;
@@ -448,7 +451,7 @@ namespace PuppeteerSharp
                 }
             }
 
-            var frame = !string.IsNullOrEmpty(e.FrameId) ? await FrameManager.TryGetFrameAsync(e.FrameId).ConfigureAwait(false) : null;
+            var frame = !string.IsNullOrEmpty(e.FrameId) ? await FrameManager.FrameTree.TryGetFrameAsync(e.FrameId).ConfigureAwait(false) : null;
 
             request = new Request(
                 _client,
@@ -462,7 +465,7 @@ namespace PuppeteerSharp
 
             Request?.Invoke(this, new RequestEventArgs
             {
-                Request = request
+                Request = request,
             });
         }
 
@@ -474,6 +477,7 @@ namespace PuppeteerSharp
             {
                 request.FromMemoryCache = true;
             }
+
             RequestServedFromCache?.Invoke(this, new RequestEventArgs { Request = request });
         }
 
@@ -494,12 +498,12 @@ namespace PuppeteerSharp
 
             Response?.Invoke(this, new ResponseCreatedEventArgs
             {
-                Response = response
+                Response = response,
             });
 
             RequestFinished?.Invoke(this, new RequestEventArgs
             {
-                Request = request
+                Request = request,
             });
         }
 
@@ -521,6 +525,7 @@ namespace PuppeteerSharp
 
                 return;
             }
+
             await OnRequestAsync(e, null).ConfigureAwait(false);
         }
 
@@ -540,6 +545,7 @@ namespace PuppeteerSharp
             {
                 return;
             }
+
             _protocolRequestInterceptionEnabled = enabled;
             if (enabled)
             {
@@ -548,7 +554,7 @@ namespace PuppeteerSharp
                     _client.SendAsync("Fetch.enable", new FetchEnableRequest
                     {
                         HandleAuthRequests = true,
-                        Patterns = new[] { new FetchEnableRequest.Pattern { UrlPattern = "*" } }
+                        Patterns = new[] { new FetchEnableRequest.Pattern { UrlPattern = "*", } },
                     })).ConfigureAwait(false);
             }
             else

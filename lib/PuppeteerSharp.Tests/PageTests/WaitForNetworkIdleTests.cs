@@ -18,25 +18,33 @@ namespace PuppeteerSharp.Tests.PageTests
         [PuppeteerFact]
         public async Task ShouldWork()
         {
-            var t1 = DateTime.Now;
-            var t2 = DateTime.Now;
+            var t1 = DateTime.UtcNow;
+            var t2 = DateTime.UtcNow;
 
             await Page.GoToAsync(TestConstants.EmptyPage);
-            var task = Page.WaitForNetworkIdleAsync().ContinueWith(x => t1 = DateTime.Now);
+            var task = Page.WaitForNetworkIdleAsync()
+                .ContinueWith(x =>
+                {
+                    if (x.IsFaulted) throw x.Exception;
+                    return t1 = DateTime.UtcNow;
+                });
 
             await Task.WhenAll(
                 task,
-                Page.EvaluateFunctionAsync(@"
-                    (async () => {
-                        await Promise.all([
-                                fetch('/digits/1.png'),
-                                fetch('/digits/2.png'),
-                            ]);
-                        await new Promise((resolve) => setTimeout(resolve, 200));
-                        await fetch('/digits/3.png');
-                        await new Promise((resolve) => setTimeout(resolve, 200));
-                        await fetch('/digits/4.png');
-                    })();").ContinueWith(x => t2 = DateTime.Now)
+                Page.EvaluateFunctionAsync(@"async () => {
+                    await Promise.all([
+                            fetch('/digits/1.png'),
+                            fetch('/digits/2.png'),
+                        ]);
+                    await new Promise((resolve) => setTimeout(resolve, 200));
+                    await fetch('/digits/3.png');
+                    await new Promise((resolve) => setTimeout(resolve, 200));
+                    await fetch('/digits/4.png');
+                }").ContinueWith(x =>
+                {
+                    if (x.IsFaulted) throw x.Exception;
+                    t2 = DateTime.UtcNow;
+                })
             );
 
             Assert.True(t1 > t2);
@@ -57,25 +65,33 @@ namespace PuppeteerSharp.Tests.PageTests
         // This should work on Firefox, this ignore should be temporal
         // PRs are welcome :)
         [PuppeteerTest("page.spec.ts", "Page.waitForNetworkIdle", "should respect idleTime")]
-        [SkipBrowserFact(skipFirefox: true)] 
+        [SkipBrowserFact(skipFirefox: true)]
         public async Task ShouldRespectIdleTimeout()
         {
-            var t1 = DateTime.Now;
-            var t2 = DateTime.Now;
+            var t1 = DateTime.UtcNow;
+            var t2 = DateTime.UtcNow;
 
             await Page.GoToAsync(TestConstants.EmptyPage);
-            var task = Page.WaitForNetworkIdleAsync(new WaitForNetworkIdleOptions { IdleTime = 10 }).ContinueWith(x => t1 = DateTime.Now);
+            var task = Page.WaitForNetworkIdleAsync(new WaitForNetworkIdleOptions { IdleTime = 10 })
+                .ContinueWith(x =>
+                {
+                    if (x.IsFaulted) throw x.Exception;
+                    return t1 = DateTime.UtcNow;
+                });
 
             await Task.WhenAll(
                 task,
-                Page.EvaluateFunctionAsync(@"() =>
-                (async () => {
+                Page.EvaluateFunctionAsync(@"async () => {
                     await Promise.all([
                     fetch('/digits/1.png'),
                     fetch('/digits/2.png'),
                     ]);
                     await new Promise((resolve) => setTimeout(resolve, 250));
-                })()").ContinueWith(x => t2 = DateTime.Now)
+                }").ContinueWith(x =>
+                {
+                    if (x.IsFaulted) throw x.Exception;
+                    return t2 = DateTime.UtcNow;
+                })
             );
 
             Assert.True(t2 > t1);

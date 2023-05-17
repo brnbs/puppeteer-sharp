@@ -47,7 +47,7 @@ namespace PuppeteerSharp.Tests.WaitForTests
         public async Task ShouldNotAllowYouToSelectAnElementWithSingleSlashXpath()
         {
             await Page.SetContentAsync("<div>some text</div>");
-            var exception = await Assert.ThrowsAsync<EvaluationFailedException>(() =>
+            var exception = await Assert.ThrowsAsync<WaitTaskTimeoutException>(() =>
                 Page.WaitForSelectorAsync("/html/body/div"));
             Assert.NotNull(exception);
         }
@@ -56,10 +56,10 @@ namespace PuppeteerSharp.Tests.WaitForTests
         [PuppeteerFact]
         public async Task ShouldTimeout()
         {
-            var startTime = DateTime.Now;
+            var startTime = DateTime.UtcNow;
             var timeout = 42;
             await Page.WaitForTimeoutAsync(timeout);
-            Assert.True((DateTime.Now - startTime).TotalMilliseconds > timeout / 2);
+            Assert.True((DateTime.UtcNow - startTime).TotalMilliseconds > timeout / 2);
         }
 
         [PuppeteerTest("waittask.spec.ts", "Page.waitFor", "should work with multiline body")]

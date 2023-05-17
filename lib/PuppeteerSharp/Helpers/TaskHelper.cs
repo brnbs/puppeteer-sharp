@@ -13,8 +13,9 @@ namespace PuppeteerSharp.Helpers
             timeout => new TimeoutException($"Timeout of {timeout.TotalMilliseconds} ms exceeded");
 
         // Recipe from https://blogs.msdn.microsoft.com/pfxteam/2012/10/05/how-do-i-cancel-non-cancelable-async-operations/
+
         /// <summary>
-        /// Cancels the <paramref name="task"/> after <paramref name="milliseconds"/> milliseconds
+        /// Cancels the <paramref name="task"/> after <paramref name="milliseconds"/> milliseconds.
         /// </summary>
         /// <returns>The task result.</returns>
         /// <param name="task">Task to wait for.</param>
@@ -29,8 +30,9 @@ namespace PuppeteerSharp.Helpers
             => WithTimeout(task, TimeSpan.FromMilliseconds(milliseconds), exceptionFactory, cancellationToken);
 
         // Recipe from https://blogs.msdn.microsoft.com/pfxteam/2012/10/05/how-do-i-cancel-non-cancelable-async-operations/
+
         /// <summary>
-        /// Cancels the <paramref name="task"/> after a given <paramref name="timeout"/> period
+        /// Cancels the <paramref name="task"/> after a given <paramref name="timeout"/> period.
         /// </summary>
         /// <returns>The task result.</returns>
         /// <param name="task">Task to wait for.</param>
@@ -48,8 +50,9 @@ namespace PuppeteerSharp.Helpers
                 cancellationToken);
 
         // Recipe from https://blogs.msdn.microsoft.com/pfxteam/2012/10/05/how-do-i-cancel-non-cancelable-async-operations/
+
         /// <summary>
-        /// Cancels the <paramref name="task"/> after <paramref name="milliseconds"/> milliseconds
+        /// Cancels the <paramref name="task"/> after <paramref name="milliseconds"/> milliseconds.
         /// </summary>
         /// <returns>The task result.</returns>
         /// <param name="task">Task to wait for.</param>
@@ -64,8 +67,9 @@ namespace PuppeteerSharp.Helpers
             => WithTimeout(task, timeoutAction, TimeSpan.FromMilliseconds(milliseconds), cancellationToken);
 
         // Recipe from https://blogs.msdn.microsoft.com/pfxteam/2012/10/05/how-do-i-cancel-non-cancelable-async-operations/
+
         /// <summary>
-        /// Cancels the <paramref name="task"/> after a given <paramref name="timeout"/> period
+        /// Cancels the <paramref name="task"/> after a given <paramref name="timeout"/> period.
         /// </summary>
         /// <returns>The task result.</returns>
         /// <param name="task">Task to wait for.</param>
@@ -84,16 +88,23 @@ namespace PuppeteerSharp.Helpers
                 throw new ArgumentNullException(nameof(timeoutAction));
             }
 
-            if (await TimeoutTask(task, timeout).ConfigureAwait(false) && !cancellationToken.IsCancellationRequested)
+            if (await TimeoutTask(task, timeout, cancellationToken).ConfigureAwait(false))
             {
-                await timeoutAction().ConfigureAwait(false);
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    await timeoutAction().ConfigureAwait(false);
+                }
+
+                return;
             }
+
             await task.ConfigureAwait(false);
         }
 
         // Recipe from https://blogs.msdn.microsoft.com/pfxteam/2012/10/05/how-do-i-cancel-non-cancelable-async-operations/
+
         /// <summary>
-        /// Cancels the <paramref name="task"/> after <paramref name="milliseconds"/> milliseconds
+        /// Cancels the <paramref name="task"/> after <paramref name="milliseconds"/> milliseconds.
         /// </summary>
         /// <returns>The task result.</returns>
         /// <param name="task">Task to wait for.</param>
@@ -104,8 +115,9 @@ namespace PuppeteerSharp.Helpers
             => WithTimeout(task, timeoutAction, TimeSpan.FromMilliseconds(milliseconds));
 
         // Recipe from https://blogs.msdn.microsoft.com/pfxteam/2012/10/05/how-do-i-cancel-non-cancelable-async-operations/
+
         /// <summary>
-        /// Cancels the <paramref name="task"/> after a given <paramref name="timeout"/> period
+        /// Cancels the <paramref name="task"/> after a given <paramref name="timeout"/> period.
         /// </summary>
         /// <returns>The task result.</returns>
         /// <param name="task">Task to wait for.</param>
@@ -134,8 +146,9 @@ namespace PuppeteerSharp.Helpers
         }
 
         // Recipe from https://blogs.msdn.microsoft.com/pfxteam/2012/10/05/how-do-i-cancel-non-cancelable-async-operations/
+
         /// <summary>
-        /// Cancels the <paramref name="task"/> after <paramref name="milliseconds"/> milliseconds
+        /// Cancels the <paramref name="task"/> after <paramref name="milliseconds"/> milliseconds.
         /// </summary>
         /// <returns>The task result.</returns>
         /// <param name="task">Task to wait for.</param>
@@ -146,8 +159,9 @@ namespace PuppeteerSharp.Helpers
             => WithTimeout(task, TimeSpan.FromMilliseconds(milliseconds), exceptionFactory);
 
         // Recipe from https://blogs.msdn.microsoft.com/pfxteam/2012/10/05/how-do-i-cancel-non-cancelable-async-operations/
+
         /// <summary>
-        /// Cancels the <paramref name="task"/> after a given <paramref name="timeout"/> period
+        /// Cancels the <paramref name="task"/> after a given <paramref name="timeout"/> period.
         /// </summary>
         /// <returns>The task result.</returns>
         /// <param name="task">Task to wait for.</param>
@@ -178,13 +192,28 @@ namespace PuppeteerSharp.Helpers
             }
 
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            using (var cancellationToken = new CancellationTokenSource())
+            using var cancellationToken = new CancellationTokenSource(timeout);
+            using (cancellationToken.Token.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
             {
-                cancellationToken.CancelAfter(timeout);
-                using (cancellationToken.Token.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
-                {
-                    return tcs.Task == await Task.WhenAny(task, tcs.Task).ConfigureAwait(false);
-                }
+                return tcs.Task == await Task.WhenAny(task, tcs.Task).ConfigureAwait(false);
+            }
+        }
+
+        private static async Task<bool> TimeoutTask(Task task, TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            if (timeout <= TimeSpan.Zero)
+            {
+                await task.ConfigureAwait(false);
+                return false;
+            }
+
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var linkedCancellationToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            linkedCancellationToken.CancelAfter(timeout);
+
+            using (linkedCancellationToken.Token.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
+            {
+                return tcs.Task == await Task.WhenAny(task, tcs.Task).ConfigureAwait(false);
             }
         }
     }

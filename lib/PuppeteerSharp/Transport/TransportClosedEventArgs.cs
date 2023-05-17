@@ -3,7 +3,7 @@ using System;
 namespace PuppeteerSharp.Transport
 {
     /// <summary>
-    /// <see cref="IConnectionTransport.Closed"/>
+    /// <see cref="IConnectionTransport.Closed"/>.
     /// </summary>
     public class TransportClosedEventArgs : EventArgs
     {
@@ -12,6 +12,7 @@ namespace PuppeteerSharp.Transport
         /// </summary>
         /// <param name="closeReason">Close reason.</param>
         public TransportClosedEventArgs(string closeReason) => CloseReason = closeReason;
+
         /// <summary>
         /// Gets or sets the close reason.
         /// </summary>

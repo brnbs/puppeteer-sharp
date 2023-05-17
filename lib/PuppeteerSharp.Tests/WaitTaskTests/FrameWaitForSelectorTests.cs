@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using PuppeteerSharp.Tests.Attributes;
@@ -102,9 +103,10 @@ namespace PuppeteerSharp.Tests.WaitTaskTests
         {
             await FrameUtils.AttachFrameAsync(Page, "frame1", TestConstants.EmptyPage);
             var frame = Page.FirstChildFrame();
-            var waitTask = frame.WaitForSelectorAsync(".box").ContinueWith(task => task?.Exception?.InnerException);
+            var waitTask = frame.WaitForSelectorAsync(".box");
             await FrameUtils.DetachFrameAsync(Page, "frame1");
-            var waitException = await waitTask;
+            var waitException = await Assert.ThrowsAsync<WaitTaskTimeoutException>(() => waitTask);
+
             Assert.NotNull(waitException);
             Assert.Contains("waitForFunction failed: frame got detached.", waitException.Message);
         }
@@ -204,7 +206,7 @@ namespace PuppeteerSharp.Tests.WaitTaskTests
             var exception = await Assert.ThrowsAsync<WaitTaskTimeoutException>(async ()
                 => await Page.WaitForSelectorAsync("div", new WaitForSelectorOptions { Timeout = 10 }));
 
-            Assert.Contains("waiting for selector 'div' failed: timeout", exception.Message);
+            Assert.Contains("Waiting for selector `div` failed: Waiting failed: 10ms exceeded", exception.Message);
         }
 
         [PuppeteerTest("waittask.spec.ts", "Frame.waitForSelector", "should have an error message specifically for awaiting an element to be hidden")]
@@ -215,7 +217,7 @@ namespace PuppeteerSharp.Tests.WaitTaskTests
             var exception = await Assert.ThrowsAsync<WaitTaskTimeoutException>(async ()
                 => await Page.WaitForSelectorAsync("div", new WaitForSelectorOptions { Hidden = true, Timeout = 10 }));
 
-            Assert.Contains("waiting for selector 'div' to be hidden failed: timeout", exception.Message);
+            Assert.Contains("Waiting for selector `div` failed: Waiting failed: 10ms exceeded", exception.Message);
         }
 
         [PuppeteerTest("waittask.spec.ts", "Frame.waitForSelector", "should respond to node attribute mutation")]

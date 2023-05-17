@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 // https://github.com/dotnet/roslyn/blob/6da1274c9d24c2f90a48290394a951b23617f2a3/src/Compilers/Core/Portable/InternalUtilities/ConcurrentSet.cs#L16
-
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -15,7 +14,7 @@ namespace PuppeteerSharp.Helpers
     /// <summary>
     /// A concurrent, simplified HashSet.
     /// </summary>
-    /// <typeparam name="T">The type</typeparam>
+    /// <typeparam name="T">The type.</typeparam>
     [DebuggerDisplay("Count = {Count}")]
     internal sealed class ConcurrentSet<T> : ICollection<T>
     {
@@ -28,7 +27,7 @@ namespace PuppeteerSharp.Helpers
         private const int DefaultConcurrencyLevel = 2;
 
         /// <summary>
-        /// Taken from ConcurrentDictionary.DEFAULT_CAPACITY
+        /// Taken from ConcurrentDictionary.DEFAULT_CAPACITY.
         /// </summary>
         private const int DefaultCapacity = 31;
 
@@ -38,7 +37,8 @@ namespace PuppeteerSharp.Helpers
         private readonly ConcurrentDictionary<T, byte> _dictionary;
 
         /// <summary>
-        /// Construct a concurrent set with the default concurrency level.
+        /// Initializes a new instance of the <see cref="ConcurrentSet{T}"/> class.
+        /// Constructs a concurrent set with the default concurrency level.
         /// </summary>
         public ConcurrentSet()
         {
@@ -46,7 +46,8 @@ namespace PuppeteerSharp.Helpers
         }
 
         /// <summary>
-        /// Construct a concurrent set using the specified equality comparer.
+        /// Initializes a new instance of the <see cref="ConcurrentSet{T}"/> class.
+        /// Constructs a concurrent set using the specified equality comparer.
         /// </summary>
         /// <param name="equalityComparer">The equality comparer for values in the set.</param>
         public ConcurrentSet(IEqualityComparer<T> equalityComparer)
@@ -109,7 +110,7 @@ namespace PuppeteerSharp.Helpers
         }
 
         /// <summary>
-        /// Clear the set
+        /// Clear the set.
         /// </summary>
         public void Clear()
         {
@@ -126,17 +127,6 @@ namespace PuppeteerSharp.Helpers
             // of the collection resulting in a List<T> allocation. Instead, use the
             // KeyValuePair enumerator and pick off the Key part.
             return new KeyEnumerator(_dictionary);
-        }
-
-        private IEnumerator<T> GetEnumeratorImpl()
-        {
-            // PERF: Do not use dictionary.Keys here because that creates a snapshot
-            // of the collection resulting in a List<T> allocation. Instead, use the
-            // KeyValuePair enumerator and pick off the Key part.
-            foreach (var kvp in _dictionary)
-            {
-                yield return kvp.Key;
-            }
         }
 
         IEnumerator<T> IEnumerable<T>.GetEnumerator()
@@ -162,6 +152,17 @@ namespace PuppeteerSharp.Helpers
             foreach (var element in this)
             {
                 array[arrayIndex++] = element;
+            }
+        }
+
+        private IEnumerator<T> GetEnumeratorImpl()
+        {
+            // PERF: Do not use dictionary.Keys here because that creates a snapshot
+            // of the collection resulting in a List<T> allocation. Instead, use the
+            // KeyValuePair enumerator and pick off the Key part.
+            foreach (var kvp in _dictionary)
+            {
+                yield return kvp.Key;
             }
         }
 

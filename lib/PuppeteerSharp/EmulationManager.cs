@@ -16,39 +16,39 @@ namespace PuppeteerSharp
             _client = client;
         }
 
-        internal async Task<bool> EmulateViewport(ViewPortOptions viewport)
+        internal async Task<bool> EmulateViewportAsync(ViewPortOptions viewport)
         {
             var mobile = viewport.IsMobile;
             var width = viewport.Width;
             var height = viewport.Height;
             var deviceScaleFactor = viewport.DeviceScaleFactor;
-            var screenOrientation = viewport.IsLandscape ?
-                new ScreenOrientation
+            var screenOrientation = viewport.IsLandscape
+                ? new ScreenOrientation
                 {
                     Angle = 90,
-                    Type = ScreenOrientationType.LandscapePrimary
-                } :
-                new ScreenOrientation
+                    Type = ScreenOrientationType.LandscapePrimary,
+                }
+                : new ScreenOrientation
                 {
                     Angle = 0,
-                    Type = ScreenOrientationType.PortraitPrimary
+                    Type = ScreenOrientationType.PortraitPrimary,
                 };
             var hasTouch = viewport.HasTouch;
 
-            await Task.WhenAll(new Task[] {
+            await Task.WhenAll(new Task[]
+            {
                 _client.SendAsync("Emulation.setDeviceMetricsOverride", new EmulationSetDeviceMetricsOverrideRequest
                 {
                     Mobile = mobile,
                     Width = width,
                     Height = height,
                     DeviceScaleFactor = deviceScaleFactor,
-                    ScreenOrientation = screenOrientation
+                    ScreenOrientation = screenOrientation,
                 }),
                 _client.SendAsync("Emulation.setTouchEmulationEnabled", new EmulationSetTouchEmulationEnabledRequest
                 {
                     Enabled = hasTouch,
-                    Configuration = viewport.IsMobile ? "mobile" : "desktop"
-                })
+                }),
             }).ConfigureAwait(false);
 
             var reloadNeeded = _emulatingMobile != mobile || _hasTouch != hasTouch;

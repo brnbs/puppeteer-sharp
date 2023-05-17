@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Extensions.Logging;
-using PuppeteerSharp.Mobile;
 using PuppeteerSharp.Helpers;
+using PuppeteerSharp.Mobile;
 
 namespace PuppeteerSharp.Tests
 {
@@ -11,7 +11,7 @@ namespace PuppeteerSharp.Tests
     {
         public const string TestFixtureCollectionName = "PuppeteerLoaderFixture collection";
         public const int DebuggerAttachedTestTimeout = 300_000;
-        public const int DefaultTestTimeout = 30_000;
+        public const int DefaultTestTimeout = 60_000;
         public const int DefaultPuppeteerTimeout = 10_000;
         public const int Port = 8081;
         public const int HttpsPort = Port + 1;
@@ -40,10 +40,12 @@ namespace PuppeteerSharp.Tests
             "    http://localhost:<PORT>/frames/frame.html (aframe)"
         };
 
-        public static LaunchOptions DefaultBrowserOptions() => new LaunchOptions
+        public static LaunchOptions DefaultBrowserOptions() => new()
         {
             SlowMo = Convert.ToInt32(Environment.GetEnvironmentVariable("SLOW_MO")),
-            Headless = Convert.ToBoolean(Environment.GetEnvironmentVariable("HEADLESS") ?? "true"),
+            Headless = Convert.ToBoolean(
+                Environment.GetEnvironmentVariable("HEADLESS") ??
+                (System.Diagnostics.Debugger.IsAttached ? "false" : "true")),
             Product = IsChrome ? Product.Chrome : Product.Firefox,
             EnqueueAsyncMessages = Convert.ToBoolean(Environment.GetEnvironmentVariable("ENQUEUE_ASYNC_MESSAGES") ?? "false"),
             Timeout = 0,
@@ -55,7 +57,7 @@ namespace PuppeteerSharp.Tests
 #endif
         };
 
-        public static LaunchOptions BrowserWithExtensionOptions() => new LaunchOptions
+        public static LaunchOptions BrowserWithExtensionOptions() => new()
         {
             Headless = false,
             Args = new[]

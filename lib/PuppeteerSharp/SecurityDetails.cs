@@ -22,11 +22,11 @@ namespace PuppeteerSharp
         /// <summary>
         /// Initializes a new instance of the <see cref="SecurityDetails"/> class.
         /// </summary>
-        /// <param name="subjectName">Subject name</param>
-        /// <param name="issuer">Issuer</param>
-        /// <param name="validFrom">Valid from</param>
-        /// <param name="validTo">Valid to</param>
-        /// <param name="protocol">Protocol</param>
+        /// <param name="subjectName">Subject name.</param>
+        /// <param name="issuer">Issuer.</param>
+        /// <param name="validFrom">Valid from.</param>
+        /// <param name="validTo">Valid to.</param>
+        /// <param name="protocol">Protocol.</param>
         public SecurityDetails(string subjectName, string issuer, long validFrom, long validTo, string protocol)
         {
             SubjectName = subjectName;
@@ -42,24 +42,28 @@ namespace PuppeteerSharp
         /// <value>The name of the subject.</value>
         [JsonProperty]
         public string SubjectName { get; internal set; }
+
         /// <summary>
         /// Gets the issuer.
         /// </summary>
         /// <value>The issuer.</value>
         [JsonProperty]
         public string Issuer { get; internal set; }
+
         /// <summary>
         /// Gets the valid from.
         /// </summary>
         /// <value>The valid from.</value>
         [JsonProperty]
         public long ValidFrom { get; internal set; }
+
         /// <summary>
         /// Gets the valid to.
         /// </summary>
         /// <value>The valid to.</value>
         [JsonProperty]
         public long ValidTo { get; internal set; }
+
         /// <summary>
         /// Gets the protocol.
         /// </summary>

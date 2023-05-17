@@ -1,7 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using PuppeteerSharp.Tests.Attributes;
 using PuppeteerSharp.Xunit;
@@ -63,7 +61,7 @@ namespace PuppeteerSharp.Tests.BrowserContextTests
             var context = await Browser.CreateIncognitoBrowserContextAsync();
             var page = await context.NewPageAsync();
             await page.GoToAsync(TestConstants.EmptyPage);
-            var popupTargetCompletion = new TaskCompletionSource<Target>();
+            var popupTargetCompletion = new TaskCompletionSource<ITarget>();
             Browser.TargetCreated += (_, e) => popupTargetCompletion.SetResult(e.Target);
 
             await Task.WhenAll(
@@ -156,6 +154,19 @@ namespace PuppeteerSharp.Tests.BrowserContextTests
             var contexts = remoteBrowser.BrowserContexts();
             Assert.Equal(2, contexts.Length);
             remoteBrowser.Disconnect();
+            await context.CloseAsync();
+        }
+
+        [PuppeteerTest("browsercontext.spec.ts", "BrowserContext", "should provide a context id")]
+        [SkipBrowserFact(skipFirefox: true)]
+        public async Task ShouldProvideAContextId()
+        {
+            Assert.Single(Browser.BrowserContexts());
+            Assert.Null(Browser.BrowserContexts()[0].Id);
+
+            var context = await Browser.CreateIncognitoBrowserContextAsync();
+            Assert.Equal(2, Browser.BrowserContexts().Length);
+            Assert.NotNull(Browser.BrowserContexts()[1].Id);
             await context.CloseAsync();
         }
 

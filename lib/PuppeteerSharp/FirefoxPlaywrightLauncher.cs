@@ -13,12 +13,13 @@ namespace PuppeteerSharp
     /// </summary>
     public class FirefoxPlaywrightLauncher : LauncherBase
     {
-        internal static readonly string[] DefaultArgs = {
+        internal static readonly string[] _defaultArgs =
+        {
           "--no-remote",
         };
 
         /// <summary>
-        /// Creates a new <see cref="FirefoxPlaywrightLauncher"/> instance.
+        /// Initializes a new instance of the <see cref="FirefoxPlaywrightLauncher"/> class.
         /// </summary>
         /// <param name="executable">Full path of executable.</param>
         /// <param name="options">Options for launching Firefox.</param>
@@ -34,6 +35,35 @@ namespace PuppeteerSharp
 
         /// <inheritdoc />
         public override string ToString() => $"FirefoxPlaywright process; EndPoint={EndPoint}; State={CurrentState}";
+
+        internal static string[] GetDefaultArgs(LaunchOptions options)
+        {
+            var firefoxArguments = new List<string>(_defaultArgs);
+
+            if (!string.IsNullOrEmpty(options.UserDataDir))
+            {
+                firefoxArguments.Add("--profile");
+                firefoxArguments.Add(options.UserDataDir.Quote());
+            }
+
+            if (options.Headless)
+            {
+                firefoxArguments.Add("--headless");
+            }
+
+            if (options.Devtools)
+            {
+                firefoxArguments.Add("--devtools");
+            }
+
+            if (options.Args.All(arg => arg.StartsWith("-", StringComparison.Ordinal)))
+            {
+                firefoxArguments.Add("about:blank");
+            }
+
+            firefoxArguments.AddRange(options.Args);
+            return firefoxArguments.ToArray();
+        }
 
         private static (List<string> FirefoxArgs, TempDirectory TempUserDataDirectory) PrepareFirefoxArgs(LaunchOptions options)
         {
@@ -296,35 +326,6 @@ namespace PuppeteerSharp
                 string.Join("\n", defaultPreferences.Select(i => $"user_pref({JsonConvert.SerializeObject(i.Key)}, {JsonConvert.SerializeObject(i.Value)});").ToArray()));
 
             File.WriteAllText(Path.Combine(tempUserDataDirectory.Path, "prefs.js"), string.Empty);
-        }
-
-        internal static string[] GetDefaultArgs(LaunchOptions options)
-        {
-            var firefoxArguments = new List<string>(DefaultArgs);
-
-            if (!string.IsNullOrEmpty(options.UserDataDir))
-            {
-                firefoxArguments.Add("--profile");
-                firefoxArguments.Add(options.UserDataDir.Quote());
-            }
-
-            if (options.Headless)
-            {
-                firefoxArguments.Add("--headless");
-            }
-
-            if (options.Devtools)
-            {
-                firefoxArguments.Add("--devtools");
-            }
-
-            if (options.Args.All(arg => arg.StartsWith("-", StringComparison.Ordinal)))
-            {
-                firefoxArguments.Add("about:blank");
-            }
-
-            firefoxArguments.AddRange(options.Args);
-            return firefoxArguments.ToArray();
         }
     }
 }

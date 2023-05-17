@@ -44,6 +44,7 @@ namespace PuppeteerSharp.PageAccessibility
             {
                 nodeById[payload.NodeId] = new AXNode(payload);
             }
+
             foreach (var node in nodeById.Values)
             {
                 foreach (var childId in node.Payload.ChildIds)
@@ -51,24 +52,8 @@ namespace PuppeteerSharp.PageAccessibility
                     node.Children.Add(nodeById[childId]);
                 }
             }
+
             return nodeById.Values.FirstOrDefault();
-        }
-
-        private bool IsPlainTextField()
-            => !_richlyEditable && (_editable || _role == "textbox" || _role == "ComboBox" || _role == "searchbox");
-
-        private bool IsTextOnlyObject()
-            => _role == "LineBreak" ||
-                _role == "text" ||
-                _role == "InlineTextBox";
-
-        private bool HasFocusableChild()
-        {
-            if (!_cachedHasFocusableChild.HasValue)
-            {
-                _cachedHasFocusableChild = Children.Any(c => c.Focusable || c.HasFocusableChild());
-            }
-            return _cachedHasFocusableChild.Value;
         }
 
         internal AXNode Find(Func<AXNode, bool> predicate)
@@ -77,6 +62,7 @@ namespace PuppeteerSharp.PageAccessibility
             {
                 return this;
             }
+
             foreach (var child in Children)
             {
                 var result = child.Find(predicate);
@@ -85,6 +71,7 @@ namespace PuppeteerSharp.PageAccessibility
                     return result;
                 }
             }
+
             return null;
         }
 
@@ -126,14 +113,17 @@ namespace PuppeteerSharp.PageAccessibility
             {
                 return false;
             }
+
             if (Focusable && !string.IsNullOrEmpty(_name))
             {
                 return true;
             }
+
             if (_role == "heading" && !string.IsNullOrEmpty(_name))
             {
                 return true;
             }
+
             return false;
         }
 
@@ -190,6 +180,7 @@ namespace PuppeteerSharp.PageAccessibility
             {
                 return false;
             }
+
             return IsLeafNode() && !string.IsNullOrEmpty(_name);
         }
 
@@ -209,10 +200,12 @@ namespace PuppeteerSharp.PageAccessibility
             {
                 properties["name"] = Payload.Name.Value;
             }
+
             if (Payload.Value != null)
             {
                 properties["value"] = Payload.Value.Value;
             }
+
             if (Payload.Description != null)
             {
                 properties["description"] = Payload.Description.Value;
@@ -247,10 +240,23 @@ namespace PuppeteerSharp.PageAccessibility
                 AutoComplete = GetIfNotFalse(properties.GetValueOrDefault("autocomplete")?.ToObject<string>()),
                 HasPopup = GetIfNotFalse(properties.GetValueOrDefault("haspopup")?.ToObject<string>()),
                 Invalid = GetIfNotFalse(properties.GetValueOrDefault("invalid")?.ToObject<string>()),
-                Orientation = GetIfNotFalse(properties.GetValueOrDefault("orientation")?.ToObject<string>())
+                Orientation = GetIfNotFalse(properties.GetValueOrDefault("orientation")?.ToObject<string>()),
             };
 
             return node;
+        }
+
+        private bool IsPlainTextField()
+            => !_richlyEditable && (_editable || _role == "textbox" || _role == "ComboBox" || _role == "searchbox");
+
+        private bool IsTextOnlyObject()
+            => _role == "LineBreak" ||
+                _role == "text" ||
+                _role == "InlineTextBox";
+
+        private bool HasFocusableChild()
+        {
+            return _cachedHasFocusableChild ??= Children.Any(c => c.Focusable || c.HasFocusableChild());
         }
 
         private string GetIfNotFalse(string value) => value != null && value != "false" ? value : null;

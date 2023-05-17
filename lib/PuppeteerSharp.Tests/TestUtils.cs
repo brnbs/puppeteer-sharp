@@ -1,3 +1,4 @@
+using System.Collections;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -6,6 +7,18 @@ namespace PuppeteerSharp.Tests
 {
     public static class TestUtils
     {
+        public static async Task ShortWaitForCollectionToHaveAtLeastNElementsAsync(ICollection collection, int minLength, int attempts = 3, int timeout = 50)
+        {
+            for (var i = 0; i < attempts; i++)
+            {
+                if (collection.Count >= minLength)
+                {
+                    break;
+                }
+                await Task.Delay(timeout);
+            }
+        }
+
         public static string FindParentDirectory(string directory)
         {
             var current = Directory.GetCurrentDirectory();
@@ -83,7 +96,7 @@ namespace PuppeteerSharp.Tests
                 await Task.Delay(100);
             }
         }
-        internal static bool IsFavicon(Request request) => request.Url.Contains("favicon.ico");
+        internal static bool IsFavicon(IRequest request) => request.Url.Contains("favicon.ico");
         internal static string CurateProtocol(string protocol)
             => protocol
                 .ToLower()

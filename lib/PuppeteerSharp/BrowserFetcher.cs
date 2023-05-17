@@ -17,20 +17,16 @@ using static PuppeteerSharp.BrowserFetcherOptions;
 
 namespace PuppeteerSharp
 {
-    /// <summary>
-    /// BrowserFetcher can download and manage different versions of Chromium.
-    /// BrowserFetcher operates on revision strings that specify a precise version of Chromium, e.g. 533271. Revision strings can be obtained from omahaproxy.appspot.com.
-    /// </summary>
-    /// <example>
-    /// Example on how to use BrowserFetcher to download a specific version of Chromium and run Puppeteer against it:
-    /// <code>
-    /// var browserFetcher = Puppeteer.CreateBrowserFetcher();
-    /// var revisionInfo = await browserFetcher.DownloadAsync(533271);
-    /// var browser = await await Puppeteer.LaunchAsync(new LaunchOptions { ExecutablePath = revisionInfo.ExecutablePath});
-    /// </code>
-    /// </example>
-    public class BrowserFetcher : IDisposable
+    /// <inheritdoc/>
+    public class BrowserFetcher : IBrowserFetcher
     {
+        /// <summary>
+        /// Default chromium revision.
+        /// </summary>
+        public const string DefaultChromiumRevision = "1069273";
+
+        private const string PublishSingleFileLocalApplicationDataFolderName = "PuppeteerSharp";
+
         private static readonly Dictionary<Product, string> _hosts = new Dictionary<Product, string>
         {
             [Product.Chrome] = "https://storage.googleapis.com",
@@ -53,35 +49,22 @@ namespace PuppeteerSharp
         private readonly CustomFileDownloadAction _customFileDownload;
         private bool _isDisposed;
 
-        /// <summary>
-        /// Default Chromium revision.
-        /// </summary>
-        public const string DefaultChromiumRevision = "970485";
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="BrowserFetcher"/> class.
-        /// </summary>
+        /// <inheritdoc cref="BrowserFetcher"/>
         public BrowserFetcher()
         {
-            DownloadsFolder = Path.Combine(Directory.GetCurrentDirectory(), ".local-chromium");
+            DownloadsFolder = Path.Combine(GetExecutablePath(), ".local-chromium");
             DownloadHost = _hosts[Product.Chrome];
             Platform = GetCurrentPlatform();
             Product = Product.Chrome;
             _customFileDownload = _webClient.DownloadFileTaskAsync;
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="BrowserFetcher"/> class.
-        /// </summary>
-        /// <param name="product">Product.</param>
+        /// <inheritdoc cref="BrowserFetcher"/>
         public BrowserFetcher(Product product) : this(new BrowserFetcherOptions { Product = product })
         {
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="BrowserFetcher"/> class.
-        /// </summary>
-        /// <param name="options">Fetch options.</param>
+        /// <inheritdoc cref="BrowserFetcher"/>
         public BrowserFetcher(BrowserFetcherOptions options)
         {
             if (options == null)
@@ -90,7 +73,7 @@ namespace PuppeteerSharp
             }
 
             DownloadsFolder = string.IsNullOrEmpty(options.Path) ?
-               Path.Combine(Directory.GetCurrentDirectory(), options.Product == Product.Chrome ? ".local-chromium" : ".local-firefox") :
+               Path.Combine(GetExecutablePath(), options.Product == Product.Chrome ? ".local-chromium" : ".local-firefox") :
                options.Path;
             DownloadHost = string.IsNullOrEmpty(options.Host) ? _hosts[options.Product] : options.Host;
             Platform = options.Platform ?? GetCurrentPlatform();
@@ -98,45 +81,25 @@ namespace PuppeteerSharp
             _customFileDownload = options.CustomFileDownload ?? _webClient.DownloadFileTaskAsync;
         }
 
-        /// <summary>
-        /// Occurs when download progress in <see cref="DownloadAsync(int)"/> changes.
-        /// </summary>
+        /// <inheritdoc/>
         public event DownloadProgressChangedEventHandler DownloadProgressChanged;
 
-        /// <summary>
-        /// Default Chromium revision.
-        /// </summary>
-        [Obsolete("Use DefaultChromiumRevision instead")]
-        public static int DefaultRevision { get; } = int.Parse(DefaultChromiumRevision, CultureInfo.CurrentCulture.NumberFormat);
-
-        /// <summary>
-        /// Default Firefox revision.
-        /// </summary>
+        /// <inheritdoc/>
         public string DefaultFirefoxRevision { get; private set; } = "latest";
 
-        /// <summary>
-        /// Gets the downloads folder.
-        /// </summary>
+        /// <inheritdoc/>
         public string DownloadsFolder { get; }
 
-        /// <summary>
-        /// A download host to be used. Defaults to https://storage.googleapis.com.
-        /// </summary>
+        /// <inheritdoc/>
         public string DownloadHost { get; }
 
-        /// <summary>
-        /// Gets the platform.
-        /// </summary>
+        /// <inheritdoc/>
         public Platform Platform { get; }
 
-        /// <summary>
-        /// Gets the product.
-        /// </summary>
+        /// <inheritdoc/>
         public Product Product { get; }
 
-        /// <summary>
-        /// Proxy used by the WebClient in <see cref="DownloadAsync(int)"/> and <see cref="CanDownloadAsync(int)"/>
-        /// </summary>
+        /// <inheritdoc/>
         public IWebProxy WebProxy
         {
             get => _webClient.Proxy;
@@ -144,18 +107,66 @@ namespace PuppeteerSharp
         }
 
         /// <summary>
-        /// The method initiates a HEAD request to check if the revision is available.
+        /// Get executable path.
         /// </summary>
-        /// <returns>Whether the version is available or not.</returns>
-        /// <param name="revision">A revision to check availability.</param>
-        [Obsolete("Use CanDownloadAsync(string revision) instead")]
-        public Task<bool> CanDownloadAsync(int revision) => CanDownloadAsync(revision.ToString(CultureInfo.CurrentCulture.NumberFormat));
+        /// <param name="product"><see cref="Product"/>.</param>
+        /// <param name="platform"><see cref="Platform"/>.</param>
+        /// <param name="revision">chromium revision.</param>
+        /// <param name="folderPath">folder path.</param>
+        /// <returns>executable path.</returns>
+        /// <exception cref="ArgumentException">For not supported <see cref="Platform"/>.</exception>
+        public static string GetExecutablePath(Product product, Platform platform, string revision, string folderPath)
+        {
+            if (product == Product.Chrome)
+            {
+                switch (platform)
+                {
+                    case Platform.MacOS:
+                        return Path.Combine(
+                            folderPath,
+                            GetArchiveName(product, platform, revision),
+                            "Chromium.app",
+                            "Contents",
+                            "MacOS",
+                            "Chromium");
 
-        /// <summary>
-        /// The method initiates a HEAD request to check if the revision is available.
-        /// </summary>
-        /// <returns>Whether the version is available or not.</returns>
-        /// <param name="revision">A revision to check availability.</param>
+                    case Platform.Linux:
+                        return Path.Combine(folderPath, GetArchiveName(product, platform, revision), "chrome");
+
+                    case Platform.Win32:
+                    case Platform.Win64:
+                        return Path.Combine(folderPath, GetArchiveName(product, platform, revision), "chrome.exe");
+
+                    default:
+                        throw new ArgumentException("Invalid platform", nameof(platform));
+                }
+            }
+            else
+            {
+                switch (platform)
+                {
+                    case Platform.MacOS:
+                        return Path.Combine(
+                            folderPath,
+                            "Firefox Nightly.app",
+                            "Contents",
+                            "MacOS",
+                            "firefox");
+
+                    case Platform.Linux:
+                        return Path.Combine(folderPath, "firefox", "firefox");
+
+                    case Platform.Win32:
+                    case Platform.Win64:
+                        return Path.Combine(folderPath, "firefox", "firefox.exe");
+
+                    default:
+                        throw new ArgumentException("Invalid platform", nameof(platform));
+                }
+            }
+        }
+
+        /// <inheritdoc/>
         public async Task<bool> CanDownloadAsync(string revision)
         {
             try
@@ -176,10 +187,7 @@ namespace PuppeteerSharp
             }
         }
 
-        /// <summary>
-        /// A list of all revisions available locally on disk.
-        /// </summary>
-        /// <returns>The available revisions.</returns>
+        /// <inheritdoc/>
         public IEnumerable<string> LocalRevisions()
         {
             var directoryInfo = new DirectoryInfo(DownloadsFolder);
@@ -192,17 +200,7 @@ namespace PuppeteerSharp
             return Array.Empty<string>();
         }
 
-        /// <summary>
-        /// Removes a downloaded revision.
-        /// </summary>
-        /// <param name="revision">Revision to remove.</param>
-        [Obsolete("Use remove(string revision) instead")]
-        public void Remove(int revision) => Remove(revision.ToString(CultureInfo.CurrentCulture.NumberFormat));
-
-        /// <summary>
-        /// Removes a downloaded revision.
-        /// </summary>
-        /// <param name="revision">Revision to remove.</param>
+        /// <inheritdoc/>
         public void Remove(string revision)
         {
             var directory = new DirectoryInfo(GetFolderPath(revision));
@@ -212,26 +210,11 @@ namespace PuppeteerSharp
             }
         }
 
-        /// <summary>
-        /// Gets the revision info.
-        /// </summary>
-        /// <returns>Revision info.</returns>
-        /// <param name="revision">A revision to get info for.</param>
-        [Obsolete("Use RevisionInfo(string revision) instead")]
-        public RevisionInfo RevisionInfo(int revision) => RevisionInfo(revision.ToString(CultureInfo.CurrentCulture.NumberFormat));
-
-        /// <summary>
-        /// Gets the revision info.
-        /// </summary>
-        /// <returns>Revision info.</returns>
+        /// <inheritdoc/>
         public async Task<RevisionInfo> GetRevisionInfoAsync()
             => RevisionInfo(Product == Product.Chrome ? DefaultChromiumRevision : await GetDefaultFirefoxRevisionAsync().ConfigureAwait(false));
 
-        /// <summary>
-        /// Gets the revision info.
-        /// </summary>
-        /// <returns>Revision info.</returns>
-        /// <param name="revision">A revision to get info for.</param>
+        /// <inheritdoc/>
         public RevisionInfo RevisionInfo(string revision)
         {
             var result = new RevisionInfo
@@ -239,7 +222,7 @@ namespace PuppeteerSharp
                 FolderPath = GetFolderPath(revision),
                 Url = GetDownloadURL(Product, Platform, DownloadHost, revision),
                 Revision = revision,
-                Platform = Platform
+                Platform = Platform,
             };
             result.ExecutablePath = GetExecutablePath(Product, Platform, revision, result.FolderPath);
             result.Local = new DirectoryInfo(result.FolderPath).Exists;
@@ -247,29 +230,14 @@ namespace PuppeteerSharp
             return result;
         }
 
-        /// <summary>
-        /// Downloads the revision.
-        /// </summary>
-        /// <returns>Task which resolves to the completed download.</returns>
-        /// <param name="revision">Revision.</param>
-        [Obsolete("Use DownloadAsync(string revision) instead")]
-        public Task<RevisionInfo> DownloadAsync(int revision) => DownloadAsync(revision.ToString(CultureInfo.CurrentCulture.NumberFormat));
-
-        /// <summary>
-        /// Downloads the revision.
-        /// </summary>
-        /// <returns>Task which resolves to the completed download.</returns>
+        /// <inheritdoc/>
         public async Task<RevisionInfo> DownloadAsync()
             => await DownloadAsync(
                 Product == Product.Chrome
                 ? DefaultChromiumRevision
                 : await GetDefaultFirefoxRevisionAsync().ConfigureAwait(false)).ConfigureAwait(false);
 
-        /// <summary>
-        /// Downloads the revision.
-        /// </summary>
-        /// <returns>Task which resolves to the completed download.</returns>
-        /// <param name="revision">Revision.</param>
+        /// <inheritdoc/>
         public async Task<RevisionInfo> DownloadAsync(string revision)
         {
             var url = GetDownloadURL(Product, Platform, DownloadHost, revision);
@@ -322,9 +290,12 @@ namespace PuppeteerSharp
                 var executables = new string[]
                 {
                     "chrome",
+                    "chrome_crashpad_handler",
+                    "chrome-management-service",
                     "chrome_sandbox", // setuid
                     "crashpad_handler",
                     "google-chrome",
+                    "libvulkan.so.1",
                     "nacl_helper",
                     "nacl_helper_bootstrap",
                     "xdg-mime",
@@ -351,6 +322,191 @@ namespace PuppeteerSharp
             return RevisionInfo(revision);
         }
 
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <inheritdoc/>
+        public string GetExecutablePath(string revision)
+            => GetExecutablePath(Product, Platform, revision, GetFolderPath(revision));
+
+        internal static Platform GetCurrentPlatform()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return Platform.MacOS;
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                return Platform.Linux;
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return RuntimeInformation.OSArchitecture == Architecture.X64 ? Platform.Win64 : Platform.Win32;
+            }
+
+            return Platform.Unknown;
+        }
+
+        internal static string GetExecutablePath()
+        {
+            var assembly = typeof(Puppeteer).Assembly;
+            var assemblyName = assembly.GetName().Name + ".dll";
+            DirectoryInfo assemblyDirectory = new(AppContext.BaseDirectory);
+
+            if (!assemblyDirectory.Exists || !File.Exists(Path.Combine(assemblyDirectory.FullName, assemblyName)))
+            {
+                var assemblyLocation = assembly.Location;
+
+                if (string.IsNullOrEmpty(assemblyLocation))
+                {
+                    var singleFilePublishFilePathForBrowserExecutables = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), PublishSingleFileLocalApplicationDataFolderName);
+                    if (!Directory.Exists(singleFilePublishFilePathForBrowserExecutables))
+                    {
+                        Directory.CreateDirectory(singleFilePublishFilePathForBrowserExecutables);
+                    }
+
+                    return singleFilePublishFilePathForBrowserExecutables;
+                }
+
+                assemblyDirectory = new FileInfo(assemblyLocation).Directory;
+            }
+
+            if (!assemblyDirectory.Exists || !File.Exists(Path.Combine(assemblyDirectory.FullName, assemblyName)))
+            {
+                assemblyDirectory = new DirectoryInfo(Directory.GetCurrentDirectory());
+            }
+
+            return assemblyDirectory.FullName;
+        }
+
+        /// <summary>
+        /// Dispose <see cref="WebClient"/>.
+        /// </summary>
+        /// <param name="disposing">Indicates whether disposal was initiated by <see cref="Dispose()"/> operation.</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _webClient.Dispose();
+            }
+
+            _isDisposed = true;
+        }
+
+        private static string GetArchiveName(Product product, Platform platform, string revision)
+        {
+            if (product == Product.Chrome)
+            {
+                switch (platform)
+                {
+                    case Platform.Linux:
+                        return "chrome-linux";
+
+                    case Platform.MacOS:
+                        return "chrome-mac";
+
+                    case Platform.Win32:
+                    case Platform.Win64:
+                        return int.TryParse(revision, out var revValue) && revValue > 591479 ? "chrome-win" : "chrome-win32";
+
+                    default:
+                        throw new ArgumentException("Invalid platform", nameof(platform));
+                }
+            }
+            else
+            {
+                switch (platform)
+                {
+                    case Platform.Linux:
+                        return "linux";
+
+                    case Platform.MacOS:
+                        return "mac";
+
+                    case Platform.Win32:
+                        return "win32";
+
+                    case Platform.Win64:
+                        return "win64";
+
+                    default:
+                        throw new ArgumentException("Invalid platform", nameof(platform));
+                }
+            }
+        }
+
+        private static string GetDownloadURL(Product product, Platform platform, string host, string revision)
+            => string.Format(CultureInfo.CurrentCulture, _downloadUrls[(product, platform)], host, revision, GetArchiveName(product, platform, revision));
+
+        private static void ExtractTar(string zipPath, string folderPath)
+        {
+            new DirectoryInfo(folderPath).Create();
+            using var process = new Process();
+            process.StartInfo.FileName = "tar";
+            process.StartInfo.Arguments = $"-xvjf \"{zipPath}\" -C \"{folderPath}\"";
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.UseShellExecute = false;
+            process.Start();
+            process.WaitForExit();
+        }
+
+        private string GetFolderPath(string revision)
+            => Path.Combine(DownloadsFolder, $"{Platform}-{revision}");
+
+        private void NativeExtractToDirectory(string zipPath, string folderPath)
+        {
+            using var process = new Process();
+            process.StartInfo.FileName = "unzip";
+            process.StartInfo.Arguments = $"\"{zipPath}\" -d \"{folderPath}\"";
+            process.Start();
+            process.WaitForExit();
+        }
+
+        private string GetRevisionFromPath(string folderName)
+        {
+            var splits = folderName.Split('-');
+            if (splits.Length != 2)
+            {
+                return "0";
+            }
+
+            if (!Enum.TryParse<Platform>(splits[0], out var platform))
+            {
+                platform = Platform.Unknown;
+            }
+
+            if (!_downloadUrls.Keys.Contains((Product, platform)))
+            {
+                return "0";
+            }
+
+            return splits[1];
+        }
+
+        private async Task<string> GetDefaultFirefoxRevisionAsync()
+        {
+            if (DefaultFirefoxRevision == "latest")
+            {
+                using var client = new HttpClient();
+                var response = await client.GetStringAsync("https://product-details.mozilla.org/1.0/firefox_versions.json").ConfigureAwait(false);
+                var version = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
+                DefaultFirefoxRevision = version["FIREFOX_NIGHTLY"];
+            }
+
+            return DefaultFirefoxRevision;
+        }
+
         private Task InstallDMGAsync(string dmgPath, string folderPath)
         {
             try
@@ -366,7 +522,7 @@ namespace PuppeteerSharp
 
                 using var process = new Process
                 {
-                    EnableRaisingEvents = true
+                    EnableRaisingEvents = true,
                 };
 
                 process.StartInfo.FileName = "hdiutil";
@@ -431,231 +587,6 @@ namespace PuppeteerSharp
             {
                 // swallow
             }
-        }
-
-        private static void ExtractTar(string zipPath, string folderPath)
-        {
-            new DirectoryInfo(folderPath).Create();
-            using var process = new Process();
-            process.StartInfo.FileName = "tar";
-            process.StartInfo.Arguments = $"-xvjf \"{zipPath}\" -C \"{folderPath}\"";
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.UseShellExecute = false;
-            process.Start();
-            process.WaitForExit();
-        }
-
-        /// <summary>
-        /// Gets the executable path for a revision.
-        /// </summary>
-        /// <returns>The executable path.</returns>
-        /// <param name="revision">Revision.</param>
-        [Obsolete("Use GetExecutablePath(string revision) instead")]
-        public string GetExecutablePath(int revision) => GetExecutablePath(revision.ToString(CultureInfo.CurrentCulture.NumberFormat));
-
-        /// <summary>
-        /// Gets the executable path for a revision.
-        /// </summary>
-        /// <returns>The executable path.</returns>
-        /// <param name="revision">Revision.</param>
-        public string GetExecutablePath(string revision)
-            => GetExecutablePath(Product, Platform, revision, GetFolderPath(revision));
-
-        /// <summary>
-        /// Gets the executable path.
-        /// </summary>
-        /// <returns>The executable path.</returns>
-        /// <param name="product">Product.</param>
-        /// <param name="platform">Platform.</param>
-        /// <param name="revision">Revision.</param>
-        /// <param name="folderPath">Folder path.</param>
-        [Obsolete("Use GetExecutablePath(string product, Platform platform, string revision, string folderPath) instead")]
-        public static string GetExecutablePath(Product product, Platform platform, int revision, string folderPath)
-            => GetExecutablePath(product, platform, revision.ToString(CultureInfo.CurrentCulture.NumberFormat), folderPath);
-
-        /// <summary>
-        /// Gets the executable path.
-        /// </summary>
-        /// <returns>The executable path.</returns>
-        /// <param name="product">Product.</param>
-        /// <param name="platform">Platform.</param>
-        /// <param name="revision">Revision.</param>
-        /// <param name="folderPath">Folder path.</param>
-        public static string GetExecutablePath(Product product, Platform platform, string revision, string folderPath)
-        {
-            if (product == Product.Chrome)
-            {
-                switch (platform)
-                {
-                    case Platform.MacOS:
-                        return Path.Combine(
-                            folderPath,
-                            GetArchiveName(product, platform, revision),
-                            "Chromium.app",
-                            "Contents",
-                            "MacOS",
-                            "Chromium");
-                    case Platform.Linux:
-                        return Path.Combine(folderPath, GetArchiveName(product, platform, revision), "chrome");
-                    case Platform.Win32:
-                    case Platform.Win64:
-                        return Path.Combine(folderPath, GetArchiveName(product, platform, revision), "chrome.exe");
-                    default:
-                        throw new ArgumentException("Invalid platform", nameof(platform));
-                }
-            }
-            else
-            {
-                switch (platform)
-                {
-                    case Platform.MacOS:
-                        return Path.Combine(
-                            folderPath,
-                            "Firefox Nightly.app",
-                            "Contents",
-                            "MacOS",
-                            "firefox");
-                    case Platform.Linux:
-                        return Path.Combine(folderPath, "firefox", "firefox");
-                    case Platform.Win32:
-                    case Platform.Win64:
-                        return Path.Combine(folderPath, "firefox", "firefox.exe");
-                    default:
-                        throw new ArgumentException("Invalid platform", nameof(platform));
-                }
-            }
-        }
-
-        internal static Platform GetCurrentPlatform()
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                return Platform.MacOS;
-            }
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                return Platform.Linux;
-            }
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                return RuntimeInformation.OSArchitecture == Architecture.X64 ? Platform.Win64 : Platform.Win32;
-            }
-
-            return Platform.Unknown;
-        }
-
-        private string GetFolderPath(string revision)
-            => Path.Combine(DownloadsFolder, $"{Platform}-{revision}");
-
-        private void NativeExtractToDirectory(string zipPath, string folderPath)
-        {
-            using var process = new Process();
-            process.StartInfo.FileName = "unzip";
-            process.StartInfo.Arguments = $"\"{zipPath}\" -d \"{folderPath}\"";
-            process.Start();
-            process.WaitForExit();
-        }
-
-        private string GetRevisionFromPath(string folderName)
-        {
-            var splits = folderName.Split('-');
-            if (splits.Length != 2)
-            {
-                return "0";
-            }
-
-            if (!Enum.TryParse<Platform>(splits[0], out var platform))
-            {
-                platform = Platform.Unknown;
-            }
-
-            if (!_downloadUrls.Keys.Contains((Product, platform)))
-            {
-                return "0";
-            }
-
-            return splits[1];
-        }
-
-        private async Task<string> GetDefaultFirefoxRevisionAsync()
-        {
-            if (DefaultFirefoxRevision == "latest")
-            {
-                using var client = new HttpClient();
-                var response = await client.GetStringAsync("https://product-details.mozilla.org/1.0/firefox_versions.json").ConfigureAwait(false);
-                var version = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
-                DefaultFirefoxRevision = version["FIREFOX_NIGHTLY"];
-            }
-
-            return DefaultFirefoxRevision;
-        }
-
-        private static string GetArchiveName(Product product, Platform platform, string revision)
-        {
-            if (product == Product.Chrome)
-            {
-                switch (platform)
-                {
-                    case Platform.Linux:
-                        return "chrome-linux";
-                    case Platform.MacOS:
-                        return "chrome-mac";
-                    case Platform.Win32:
-                    case Platform.Win64:
-                        return int.TryParse(revision, out var revValue) && revValue > 591479 ? "chrome-win" : "chrome-win32";
-                    default:
-                        throw new ArgumentException("Invalid platform", nameof(platform));
-                }
-            }
-            else
-            {
-                switch (platform)
-                {
-                    case Platform.Linux:
-                        return "linux";
-                    case Platform.MacOS:
-                        return "mac";
-                    case Platform.Win32:
-                        return "win32";
-                    case Platform.Win64:
-                        return "win64";
-                    default:
-                        throw new ArgumentException("Invalid platform", nameof(platform));
-                }
-            }
-        }
-
-        private static string GetDownloadURL(Product product, Platform platform, string host, string revision)
-            => string.Format(CultureInfo.CurrentCulture, _downloadUrls[(product, platform)], host, revision, GetArchiveName(product, platform, revision));
-
-        /// <summary>
-        /// Disposes of any disposable members in <see cref="BrowserFetcher" />.
-        /// </summary>
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        /// <summary>
-        /// Disposes of any disposable members in <see cref="BrowserFetcher" />.
-        /// </summary>
-        /// <param name="disposing">Indicates disposing of managed resources.</param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (_isDisposed)
-            {
-                return;
-            }
-
-            if (disposing)
-            {
-                _webClient.Dispose();
-            }
-
-            _isDisposed = true;
         }
     }
 }

@@ -10,7 +10,7 @@ using PuppeteerSharp.Messaging;
 namespace PuppeteerSharp
 {
     /// <summary>
-    /// You can use <see cref="Tracing.StartAsync(TracingOptions)"/> and <see cref="Tracing.StopAsync"/> to create a trace file which can be opened in Chrome DevTools or timeline viewer.
+    /// You can use <see cref="ITracing.StartAsync(TracingOptions)"/> and <see cref="ITracing.StopAsync"/> to create a trace file which can be opened in Chrome DevTools or timeline viewer.
     /// </summary>
     /// <example>
     /// <code>
@@ -24,12 +24,10 @@ namespace PuppeteerSharp
     /// </code>
     /// </example>
 #pragma warning disable CA1724
-    public class Tracing
+    public class Tracing : ITracing
+
 #pragma warning restore CA1724
     {
-        private readonly CDPSession _client;
-        private bool _recording;
-        private string _path;
         private static readonly List<string> _defaultCategories = new List<string>
         {
             "-*",
@@ -45,7 +43,10 @@ namespace PuppeteerSharp
             "disabled-by-default-v8.cpu_profiler",
         };
 
+        private readonly CDPSession _client;
         private readonly ILogger _logger;
+        private bool _recording;
+        private string _path;
 
         internal Tracing(CDPSession client)
         {
@@ -56,8 +57,8 @@ namespace PuppeteerSharp
         /// <summary>
         /// Starts tracing.
         /// </summary>
-        /// <returns>Start task</returns>
-        /// <param name="options">Tracing options</param>
+        /// <returns>Start task.</returns>
+        /// <param name="options">Tracing options.</param>
         public Task StartAsync(TracingOptions options = null)
         {
             if (_recording)
@@ -78,14 +79,14 @@ namespace PuppeteerSharp
             return _client.SendAsync("Tracing.start", new TracingStartRequest
             {
                 TransferMode = "ReturnAsStream",
-                Categories = string.Join(", ", categories)
+                Categories = string.Join(", ", categories),
             });
         }
 
         /// <summary>
-        /// Stops tracing
+        /// Stops tracing.
         /// </summary>
-        /// <returns>Stop task</returns>
+        /// <returns>Stop task.</returns>
         public async Task<string> StopAsync()
         {
             var taskWrapper = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -19,12 +19,12 @@ namespace PuppeteerSharp.Transport
         public static readonly TransportFactory DefaultTransportFactory = CreateDefaultTransport;
 
         /// <summary>
-        /// Gets the default <see cref="TransportFactory"/>
+        /// Gets the default <see cref="TransportFactory"/>.
         /// </summary>
         public static readonly WebSocketFactory DefaultWebSocketFactory = CreateDefaultWebSocket;
 
         /// <summary>
-        /// Gets the default <see cref="TransportTaskScheduler"/>
+        /// Gets the default <see cref="TransportTaskScheduler"/>.
         /// </summary>
         public static readonly TransportTaskScheduler DefaultTransportScheduler = ScheduleTransportTask;
 
@@ -35,9 +35,9 @@ namespace PuppeteerSharp.Transport
         private CancellationTokenSource _readerCancellationSource = new CancellationTokenSource();
 
         /// <summary>
-        /// Initialize the Transport
+        /// Initializes a new instance of the <see cref="WebSocketTransport"/> class.
         /// </summary>
-        /// <param name="client">The web socket</param>
+        /// <param name="client">The web socket.</param>
         /// <param name="scheduler">The scheduler to use for long-running tasks.</param>
         /// <param name="queueRequests">Indicates whether requests should be queued.</param>
         public WebSocketTransport(WebSocket client, TransportTaskScheduler scheduler, bool queueRequests)
@@ -46,6 +46,7 @@ namespace PuppeteerSharp.Transport
             {
                 throw new ArgumentNullException(nameof(client));
             }
+
             if (scheduler == null)
             {
                 throw new ArgumentNullException(nameof(scheduler));
@@ -60,6 +61,7 @@ namespace PuppeteerSharp.Transport
         /// Occurs when the transport is closed.
         /// </summary>
         public event EventHandler<TransportClosedEventArgs> Closed;
+
         /// <summary>
         /// Occurs when a message is received.
         /// </summary>
@@ -69,28 +71,6 @@ namespace PuppeteerSharp.Transport
         /// Gets a value indicating whether this <see cref="PuppeteerSharp.Transport.IConnectionTransport"/> is closed.
         /// </summary>
         public bool IsClosed { get; private set; }
-
-        private static async Task<WebSocket> CreateDefaultWebSocket(Uri url, IConnectionOptions options, CancellationToken cancellationToken)
-        {
-            var result = new ClientWebSocket();
-            result.Options.KeepAliveInterval = TimeSpan.Zero;
-            await result.ConnectAsync(url, cancellationToken).ConfigureAwait(false);
-            return result;
-        }
-
-        private static async Task<IConnectionTransport> CreateDefaultTransport(Uri url, IConnectionOptions connectionOptions, CancellationToken cancellationToken)
-        {
-            var webSocketFactory = connectionOptions.WebSocketFactory ?? DefaultWebSocketFactory;
-            var webSocket = await webSocketFactory(url, connectionOptions, cancellationToken).ConfigureAwait(false);
-            return new WebSocketTransport(webSocket, DefaultTransportScheduler, connectionOptions.EnqueueTransportMessages);
-        }
-
-        private static void ScheduleTransportTask(Func<CancellationToken, Task> taskFactory, CancellationToken cancellationToken)
-            => Task.Factory.StartNew(
-                () => taskFactory(cancellationToken),
-                cancellationToken,
-                TaskCreationOptions.LongRunning,
-                TaskScheduler.Default);
 
         /// <summary>
         /// Sends a message using the transport.
@@ -129,7 +109,7 @@ namespace PuppeteerSharp.Transport
         }
 
         /// <summary>
-        /// Close the WebSocketTransport
+        /// Close the WebSocketTransport.
         /// </summary>
         /// <param name="disposing">Indicates whether disposal was initiated by <see cref="Dispose()"/> operation.</param>
         protected virtual void Dispose(bool disposing)
@@ -140,8 +120,30 @@ namespace PuppeteerSharp.Transport
             _socketQueue.Dispose();
         }
 
+        private static async Task<WebSocket> CreateDefaultWebSocket(Uri url, IConnectionOptions options, CancellationToken cancellationToken)
+        {
+            var result = new ClientWebSocket();
+            result.Options.KeepAliveInterval = TimeSpan.Zero;
+            await result.ConnectAsync(url, cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+
+        private static async Task<IConnectionTransport> CreateDefaultTransport(Uri url, IConnectionOptions connectionOptions, CancellationToken cancellationToken)
+        {
+            var webSocketFactory = connectionOptions.WebSocketFactory ?? DefaultWebSocketFactory;
+            var webSocket = await webSocketFactory(url, connectionOptions, cancellationToken).ConfigureAwait(false);
+            return new WebSocketTransport(webSocket, DefaultTransportScheduler, connectionOptions.EnqueueTransportMessages);
+        }
+
+        private static void ScheduleTransportTask(Func<CancellationToken, Task> taskFactory, CancellationToken cancellationToken)
+            => Task.Factory.StartNew(
+                () => taskFactory(cancellationToken),
+                cancellationToken,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+
         /// <summary>
-        /// Starts listening the socket
+        /// Starts listening the socket.
         /// </summary>
         /// <returns>The start.</returns>
         private async Task<object> GetResponseAsync(CancellationToken cancellationToken)

@@ -17,7 +17,7 @@ namespace PuppeteerSharp.Tests.PageTests
         [SkipBrowserFact(skipFirefox: true)]
         public async Task ShouldWork()
         {
-            var popupTaskSource = new TaskCompletionSource<Page>();
+            var popupTaskSource = new TaskCompletionSource<IPage>();
             Page.Popup += (_, e) => popupTaskSource.TrySetResult(e.PopupPage);
 
             await Task.WhenAll(
@@ -32,7 +32,7 @@ namespace PuppeteerSharp.Tests.PageTests
         [SkipBrowserFact(skipFirefox: true)]
         public async Task ShouldWorkWithNoopener()
         {
-            var popupTaskSource = new TaskCompletionSource<Page>();
+            var popupTaskSource = new TaskCompletionSource<IPage>();
             Page.Popup += (_, e) => popupTaskSource.TrySetResult(e.PopupPage);
 
             await Task.WhenAll(
@@ -50,7 +50,7 @@ namespace PuppeteerSharp.Tests.PageTests
             await Page.GoToAsync(TestConstants.EmptyPage);
             await Page.SetContentAsync("<a target=_blank href='/one-style.html'>yo</a>");
 
-            var popupTaskSource = new TaskCompletionSource<Page>();
+            var popupTaskSource = new TaskCompletionSource<IPage>();
             Page.Popup += (_, e) => popupTaskSource.TrySetResult(e.PopupPage);
 
             await Task.WhenAll(
@@ -63,12 +63,12 @@ namespace PuppeteerSharp.Tests.PageTests
 
         [PuppeteerTest("page.spec.ts", "Page.Events.Popup", "should work with clicking target=_blank and with rel=opener")]
         [SkipBrowserFact(skipFirefox: true)]
-        public async Task ShouldWorkWithFakeClickingTargetBlankAndReNoopener()
+        public async Task ShouldWorkWithFakeClickingTargetBlankAndRelOpener()
         {
             await Page.GoToAsync(TestConstants.EmptyPage);
-            await Page.SetContentAsync("<a target=_blank rel=noopener href='/one-style.html'>yo</a>");
+            await Page.SetContentAsync("<a target=_blank rel=opener href='/one-style.html'>yo</a>");
 
-            var popupTaskSource = new TaskCompletionSource<Page>();
+            var popupTaskSource = new TaskCompletionSource<IPage>();
             Page.Popup += (_, e) => popupTaskSource.TrySetResult(e.PopupPage);
 
             await Task.WhenAll(
@@ -76,7 +76,7 @@ namespace PuppeteerSharp.Tests.PageTests
                 Page.QuerySelectorAsync("a").EvaluateFunctionAsync("a => a.click()"));
 
             Assert.False(await Page.EvaluateExpressionAsync<bool>("!!window.opener"));
-            Assert.False(await popupTaskSource.Task.Result.EvaluateExpressionAsync<bool>("!!window.opener"));
+            Assert.True(await popupTaskSource.Task.Result.EvaluateExpressionAsync<bool>("!!window.opener"));
         }
 
         [PuppeteerTest("page.spec.ts", "Page.Events.Popup", "should work with fake-clicking target=_blank and rel=noopener")]
@@ -86,7 +86,7 @@ namespace PuppeteerSharp.Tests.PageTests
             await Page.GoToAsync(TestConstants.EmptyPage);
             await Page.SetContentAsync("<a target=_blank rel=noopener href='/one-style.html'>yo</a>");
 
-            var popupTaskSource = new TaskCompletionSource<Page>();
+            var popupTaskSource = new TaskCompletionSource<IPage>();
             Page.Popup += (_, e) => popupTaskSource.TrySetResult(e.PopupPage);
 
             await Task.WhenAll(
@@ -104,7 +104,7 @@ namespace PuppeteerSharp.Tests.PageTests
             await Page.GoToAsync(TestConstants.EmptyPage);
             await Page.SetContentAsync("<a target=_blank rel=noopener href='/one-style.html'>yo</a>");
 
-            var popupTaskSource = new TaskCompletionSource<Page>();
+            var popupTaskSource = new TaskCompletionSource<IPage>();
             Page.Popup += (_, e) => popupTaskSource.TrySetResult(e.PopupPage);
 
             await Task.WhenAll(

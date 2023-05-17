@@ -1,7 +1,7 @@
 namespace PuppeteerSharp.PageAccessibility
 {
     /// <summary>
-    /// Three-state boolean. See <seealso cref="SerializedAXNode.Checked"/> and <seealso cref="SerializedAXNode.Pressed"/>
+    /// Three-state boolean. See <seealso cref="SerializedAXNode.Checked"/> and. <seealso cref="SerializedAXNode.Pressed"/>
     /// </summary>
     public enum CheckedState
     {
@@ -9,13 +9,15 @@ namespace PuppeteerSharp.PageAccessibility
         /// Flse.
         /// </summary>
         False = 0,
+
         /// <summary>
         /// True.
         /// </summary>
         True,
+
         /// <summary>
         /// Mixed.
         /// </summary>
-        Mixed
+        Mixed,
     }
 }

@@ -9,10 +9,12 @@ namespace PuppeteerSharp
         /// Chrome.
         /// </summary>
         Chrome,
+
         /// <summary>
         /// Firefox.
         /// </summary>
         Firefox,
+
         /// <summary>
         /// Firefox built by Playwright Team.
         /// </summary>

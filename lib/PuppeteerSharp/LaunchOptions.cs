@@ -86,13 +86,13 @@ namespace PuppeteerSharp
         public bool LogProcess { get; set; }
 
         /// <summary>
-        /// If <c>true</c>, then do not use <see cref="Puppeteer.DefaultArgs"/>.
+        /// If <c>true</c>, then do not use <see cref="ChromiumLauncher.DefaultArgs"/>.
         /// Dangerous option; use with care. Defaults to <c>false</c>.
         /// </summary>
         public bool IgnoreDefaultArgs { get; set; }
 
         /// <summary>
-        /// if <see cref="IgnoreDefaultArgs"/> is set to <c>false</c> this list will be used to filter <see cref="Puppeteer.DefaultArgs"/>
+        /// if <see cref="IgnoreDefaultArgs"/> is set to <c>false</c> this list will be used to filter <see cref="ChromiumLauncher.DefaultArgs"/>.
         /// </summary>
         public string[] IgnoredDefaultArgs
         {
@@ -161,7 +161,7 @@ namespace PuppeteerSharp
         public bool EnqueueTransportMessages { get; set; } = true;
 
         /// <summary>
-        /// The browser to be used (Chrome, Firefox)
+        /// The browser to be used (Chrome, Firefox).
         /// </summary>
         public Product Product { get; set; } = Product.Chrome;
 

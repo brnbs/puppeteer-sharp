@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using Microsoft.Extensions.Logging;
 using PuppeteerSharp.Helpers;
 
 namespace PuppeteerSharp
@@ -13,37 +12,10 @@ namespace PuppeteerSharp
     /// </summary>
     public class ChromiumLauncher : LauncherBase
     {
-        internal static readonly string[] DefaultArgs = {
-            "--disable-background-networking",
-            "--enable-features=NetworkService,NetworkServiceInProcess",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-breakpad",
-            "--disable-client-side-phishing-detection",
-            "--disable-component-extensions-with-background-pages",
-            "--disable-default-apps",
-            "--disable-dev-shm-usage",
-            "--disable-extensions",
-            "--disable-features=Translate",
-            "--disable-hang-monitor",
-            "--disable-ipc-flooding-protection",
-            "--disable-popup-blocking",
-            "--disable-prompt-on-repost",
-            "--disable-renderer-backgrounding",
-            "--disable-sync",
-            "--force-color-profile=srgb",
-            "--metrics-recording-only",
-            "--no-first-run",
-            "--enable-automation",
-            "--password-store=basic",
-            "--use-mock-keychain",
-            "--enable-blink-features=IdleDetection",
-        };
-
         private const string UserDataDirArgument = "--user-data-dir";
 
         /// <summary>
-        /// Creates a new <see cref="ChromiumLauncher"/> instance.
+        /// Initializes a new instance of the <see cref="ChromiumLauncher"/> class.
         /// </summary>
         /// <param name="executable">Full path of executable.</param>
         /// <param name="options">Options for launching Chromium.</param>
@@ -56,8 +28,75 @@ namespace PuppeteerSharp
             Process.StartInfo.Arguments = string.Join(" ", chromiumArgs);
         }
 
+        /// <summary>
+        /// The default flags that Chromium will be launched with.
+        /// </summary>
+        internal static string[] DefaultArgs { get; } =
+        {
+            "--allow-pre-commit-input",
+            "--disable-background-networking",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-breakpad",
+            "--disable-client-side-phishing-detection",
+            "--disable-component-extensions-with-background-pages",
+            "--disable-component-update",
+            "--disable-default-apps",
+            "--disable-dev-shm-usage",
+            "--disable-extensions",
+            "--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints",
+            "--disable-hang-monitor",
+            "--disable-ipc-flooding-protection",
+            "--disable-popup-blocking",
+            "--disable-prompt-on-repost",
+            "--disable-renderer-backgrounding",
+            "--disable-sync",
+            "--enable-automation",
+            "--enable-blink-features=IdleDetection",
+            "--enable-features=NetworkServiceInProcess2",
+            "--export-tagged-pdf",
+            "--force-color-profile=srgb",
+            "--metrics-recording-only",
+            "--no-first-run",
+            "--password-store=basic",
+            "--use-mock-keychain",
+        };
+
         /// <inheritdoc />
         public override string ToString() => $"Chromium process; EndPoint={EndPoint}; State={CurrentState}";
+
+        internal static string[] GetDefaultArgs(LaunchOptions options)
+        {
+            var chromiumArguments = new List<string>(DefaultArgs);
+
+            if (!string.IsNullOrEmpty(options.UserDataDir))
+            {
+                chromiumArguments.Add($"{UserDataDirArgument}={options.UserDataDir.Quote()}");
+            }
+
+            if (options.Devtools)
+            {
+                chromiumArguments.Add("--auto-open-devtools-for-tabs");
+            }
+
+            if (options.Headless)
+            {
+                chromiumArguments.AddRange(new[]
+                {
+                    "--headless",
+                    "--hide-scrollbars",
+                    "--mute-audio",
+                });
+            }
+
+            if (options.Args.All(arg => arg.StartsWith("-", StringComparison.Ordinal)))
+            {
+                chromiumArguments.Add("about:blank");
+            }
+
+            chromiumArguments.AddRange(options.Args);
+            return chromiumArguments.ToArray();
+        }
 
         private static (List<string> ChromiumArgs, TempDirectory TempUserDataDirectory) PrepareChromiumArgs(LaunchOptions options)
         {
@@ -91,38 +130,6 @@ namespace PuppeteerSharp
             }
 
             return (chromiumArgs, tempUserDataDirectory);
-        }
-
-        internal static string[] GetDefaultArgs(LaunchOptions options)
-        {
-            var chromiumArguments = new List<string>(DefaultArgs);
-
-            if (!string.IsNullOrEmpty(options.UserDataDir))
-            {
-                chromiumArguments.Add($"{UserDataDirArgument}={options.UserDataDir.Quote()}");
-            }
-
-            if (options.Devtools)
-            {
-                chromiumArguments.Add("--auto-open-devtools-for-tabs");
-            }
-
-            if (options.Headless)
-            {
-                chromiumArguments.AddRange(new[] {
-                    "--headless",
-                    "--hide-scrollbars",
-                    "--mute-audio"
-                });
-            }
-
-            if (options.Args.All(arg => arg.StartsWith("-", StringComparison.Ordinal)))
-            {
-                chromiumArguments.Add("about:blank");
-            }
-
-            chromiumArguments.AddRange(options.Args);
-            return chromiumArguments.ToArray();
         }
     }
 }

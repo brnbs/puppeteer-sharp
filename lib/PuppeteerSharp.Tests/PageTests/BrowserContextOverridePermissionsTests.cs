@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 using PuppeteerSharp.Tests.Attributes;
 using PuppeteerSharp.Xunit;
@@ -13,7 +15,7 @@ namespace PuppeteerSharp.Tests.PageTests
         {
         }
 
-        private Task<string> GetPermissionAsync(Page page, string name)
+        private Task<string> GetPermissionAsync(IPage page, string name)
             => page.EvaluateFunctionAsync<string>(
                 "name => navigator.permissions.query({ name }).then(result => result.state)",
                 name);
@@ -112,6 +114,18 @@ namespace PuppeteerSharp.Tests.PageTests
             Assert.Equal("granted", await GetPermissionAsync(otherPage, "geolocation"));
 
             await otherContext.CloseAsync();
+        }
+
+        [SkipBrowserFact(skipFirefox: true)]
+        public async Task AllEnumsdAreValid()
+        {
+            await Page.GoToAsync(TestConstants.EmptyPage);
+            await Context.OverridePermissionsAsync(
+                TestConstants.EmptyPage,
+                Enum.GetValues(typeof(OverridePermission)).Cast<OverridePermission>().ToArray());
+            Assert.Equal("granted", await GetPermissionAsync(Page, "geolocation"));
+            await Context.ClearPermissionOverridesAsync();
+            Assert.Equal("prompt", await GetPermissionAsync(Page, "geolocation"));
         }
     }
 }

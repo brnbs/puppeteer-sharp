@@ -5,12 +5,12 @@ using PuppeteerSharp.Media;
 namespace PuppeteerSharp
 {
     /// <summary>
-    /// Bounding box data returned by <see cref="ElementHandle.BoundingBoxAsync"/>.
+    /// Bounding box data returned by <see cref="IElementHandle.BoundingBoxAsync"/>.
     /// </summary>
     public class BoundingBox : IEquatable<BoundingBox>
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:PuppeteerSharp.BoundingBox"/> class.
+        /// Initializes a new instance of the <see cref="BoundingBox"/> class.
         /// </summary>
         public BoundingBox()
         {
@@ -36,32 +36,24 @@ namespace PuppeteerSharp
         /// </summary>
         /// <value>The x.</value>
         public decimal X { get; set; }
+
         /// <summary>
         /// The y coordinate of the element in pixels.
         /// </summary>
         /// <value>The y.</value>
         public decimal Y { get; set; }
+
         /// <summary>
         /// The width of the element in pixels.
         /// </summary>
         /// <value>The width.</value>
         public decimal Width { get; set; }
+
         /// <summary>
         /// The height of the element in pixels.
         /// </summary>
         /// <value>The height.</value>
         public decimal Height { get; set; }
-
-        internal Clip ToClip()
-        {
-            return new Clip
-            {
-                X = X,
-                Y = Y,
-                Width = Width,
-                Height = Height
-            };
-        }
 
         /// <inheritdoc/>
         public override bool Equals(object obj)
@@ -93,5 +85,16 @@ namespace PuppeteerSharp
                 ^ Y.GetHashCode() * 397
                 ^ Width.GetHashCode() * 397
                 ^ Height.GetHashCode() * 397;
+
+        internal Clip ToClip()
+        {
+            return new Clip
+            {
+                X = X,
+                Y = Y,
+                Width = Width,
+                Height = Height,
+            };
+        }
     }
 }

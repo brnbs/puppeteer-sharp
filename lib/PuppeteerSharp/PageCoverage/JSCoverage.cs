@@ -50,7 +50,7 @@ namespace PuppeteerSharp.PageCoverage
                 _client.SendAsync("Profiler.startPreciseCoverage", new ProfilerStartPreciseCoverageRequest
                 {
                     CallCount = false,
-                    Detailed = true
+                    Detailed = true,
                 }),
                 _client.SendAsync("Debugger.enable"),
                 _client.SendAsync("Debugger.setSkipAllPauses", new DebuggerSetSkipAllPausesRequest { Skip = true }));
@@ -62,6 +62,7 @@ namespace PuppeteerSharp.PageCoverage
             {
                 throw new InvalidOperationException("JSCoverage is not enabled");
             }
+
             _enabled = false;
 
             var profileResponseTask = _client.SendAsync<ProfilerTakePreciseCoverageResponse>("Profiler.takePreciseCoverage");
@@ -80,6 +81,7 @@ namespace PuppeteerSharp.PageCoverage
                 {
                     url = "debugger://VM" + entry.ScriptId;
                 }
+
                 if (string.IsNullOrEmpty(url) ||
                     !_scriptSources.TryGetValue(entry.ScriptId, out var text))
                 {
@@ -92,9 +94,10 @@ namespace PuppeteerSharp.PageCoverage
                 {
                     Url = url,
                     Ranges = ranges,
-                    Text = text
+                    Text = text,
                 });
             }
+
             return coverage.ToArray();
         }
 
@@ -132,7 +135,7 @@ namespace PuppeteerSharp.PageCoverage
             {
                 var response = await _client.SendAsync<DebuggerGetScriptSourceResponse>("Debugger.getScriptSource", new DebuggerGetScriptSourceRequest
                 {
-                    ScriptId = scriptParseResponse.ScriptId
+                    ScriptId = scriptParseResponse.ScriptId,
                 }).ConfigureAwait(false);
                 _scriptURLs.Add(scriptParseResponse.ScriptId, scriptParseResponse.Url);
                 _scriptSources.Add(scriptParseResponse.ScriptId, response.ScriptSource);
