@@ -174,4 +174,4 @@ Thanks to [JetBrains](https://www.jetbrains.com/?from=PuppeteerSharp) for a comm
 
 ## Building a NuGet package for Outis Nemo
 
-`dotnet pack -c Release -p:PackageVersion=10.0.0-$(Get-Date -Format "yyyyMMdd")`
+`dotnet pack -c Release -p:PackageVersion=10.0.0-$(Get-Date -Format "yyyyMMdd") .\lib\PuppeteerSharp\PuppeteerSharp.csproj`
