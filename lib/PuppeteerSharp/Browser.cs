@@ -61,7 +61,7 @@ namespace PuppeteerSharp
                 contextId => contextId,
                 contextId => new BrowserContext(Connection, this, contextId)));
 
-            if (product == Product.Firefox)
+            if (product == Product.Firefox || product == Product.FirefoxPlaywright)
             {
                 TargetManager = new FirefoxTargetManager(
                         connection,
