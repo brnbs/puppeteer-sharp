@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
@@ -11,7 +10,7 @@ namespace PuppeteerSharp
     /// </summary>
     public class ScreenshotOptions
     {
-        private static readonly Dictionary<string, ScreenshotType?> _extensionScreenshotTypeMap = new Dictionary<string, ScreenshotType?>
+        private static readonly Dictionary<string, ScreenshotType?> _extensionScreenshotTypeMap = new()
         {
             ["jpe"] = ScreenshotType.Jpeg,
             ["jpeg"] = ScreenshotType.Jpeg,
@@ -38,7 +37,7 @@ namespace PuppeteerSharp
         public bool OmitBackground { get; set; }
 
         /// <summary>
-        /// Specify screenshot type, can be either jpeg or png. Defaults to 'png'.
+        /// Specify screenshot type, can be either jpeg, png or webp. Defaults to 'png'.
         /// </summary>
         /// <value>The type.</value>
         public ScreenshotType? Type { get; set; }
@@ -51,7 +50,7 @@ namespace PuppeteerSharp
 
         /// <summary>
         /// When BurstMode is <c>true</c> the screenshot process will only execute all the screenshot setup actions (background and metrics overrides)
-        /// before the first screenshot call and it will ignore the reset actions after the screenshoot is taken.
+        /// before the first screenshot call and it will ignore the reset actions after the screenshot is taken.
         /// <see cref="IPage.SetBurstModeOffAsync"/> needs to be called after the last screenshot is taken.
         /// </summary>
         /// <example><![CDATA[
@@ -69,6 +68,21 @@ namespace PuppeteerSharp
         /// ]]></example>
         [JsonIgnore]
         public bool BurstMode { get; set; } = false;
+
+        /// <summary>
+        /// Capture the screenshot beyond the viewport.
+        /// </summary>
+        public bool CaptureBeyondViewport { get; set; } = true;
+
+        /// <summary>
+        /// Capture the screenshot from the surface, rather than the view. Defaults to <c>true</c>.
+        /// </summary>
+        public bool? FromSurface { get; set; }
+
+        /// <summary>
+        /// Optimize image encoding for speed.
+        /// </summary>
+        public bool? OptimizeForSpeed { get; set; }
 
         internal static ScreenshotType? GetScreenshotTypeFromFile(string file)
         {

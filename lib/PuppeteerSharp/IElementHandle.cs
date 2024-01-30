@@ -12,6 +12,11 @@ namespace PuppeteerSharp
     public interface IElementHandle : IJSHandle
     {
         /// <summary>
+        /// Parent frame.
+        /// </summary>
+        IFrame Frame { get; }
+
+        /// <summary>
         /// This method returns the bounding box of the element (relative to the main frame),
         /// or null if the element is not visible.
         /// </summary>
@@ -60,13 +65,23 @@ namespace PuppeteerSharp
         /// <param name="x">X coordinate.</param>
         /// <param name="y">Y coordinate.</param>
         /// <returns>A Task that resolves when the message was confirmed by the browser with the drag data.</returns>
+        [Obsolete("Just use " + nameof(DropAsync) + " instead")]
         Task<DragData> DragAsync(decimal x, decimal y);
+
+        /// <summary>
+        /// This method creates and captures a dragevent from the element.
+        /// </summary>
+        /// <param name="target">Target Element.</param>
+        /// <returns>A Task that resolves when the message was confirmed by the browser with the drag data.</returns>
+        [Obsolete("Just use " + nameof(DropAsync) + " instead")]
+        Task<DragData> DragAsync(IElementHandle target);
 
         /// <summary>
         /// Dispatches a `dragenter` event.
         /// </summary>
         /// <param name="data">Drag data containing items and operations mask.</param>
         /// <returns>A Task that resolves when the message was confirmed by the browser.</returns>
+        [Obsolete("Don't use" + nameof(DragEnterAsync) + ". `dragenter` will automatically be performed during dragging. ")]
         Task DragEnterAsync(DragData data);
 
         /// <summary>
@@ -74,6 +89,7 @@ namespace PuppeteerSharp
         /// </summary>
         /// <param name="data">Drag data containing items and operations mask.</param>
         /// <returns>A Task that resolves when the message was confirmed by the browser.</returns>
+        [Obsolete("Don't use" + nameof(DragOverAsync) + ". `dragover` will automatically be performed during dragging. ")]
         Task DragOverAsync(DragData data);
 
         /// <summary>
@@ -82,6 +98,13 @@ namespace PuppeteerSharp
         /// <param name="data">Drag data containing items and operations mask.</param>
         /// <returns>A Task that resolves when the message was confirmed by the browser.</returns>
         Task DropAsync(DragData data);
+
+        /// <summary>
+        /// Performs a dragenter, dragover, and drop in sequence.
+        /// </summary>
+        /// <param name="element">Element to drop.</param>
+        /// <returns>A Task that resolves when the message was confirmed by the browser.</returns>
+        Task DropAsync(IElementHandle element);
 
         /// <summary>
         /// Calls <c>focus</c> <see href="https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/focus"/> on the element.
@@ -98,8 +121,9 @@ namespace PuppeteerSharp
         /// <summary>
         /// Evaluates if the element is visible in the current viewport.
         /// </summary>
+        /// <param name="threshold">A number between 0 and 1 specifying the fraction of the element's area that must be visible to pass the check.</param>
         /// <returns>A task which resolves to true if the element is visible in the current viewport.</returns>
-        Task<bool> IsIntersectingViewportAsync();
+        Task<bool> IsIntersectingViewportAsync(int threshold = 0);
 
         /// <summary>
         /// Focuses the element, and then uses <see cref="IKeyboard.DownAsync(string, DownOptions)"/> and <see cref="IKeyboard.UpAsync(string)"/>.
@@ -134,7 +158,7 @@ namespace PuppeteerSharp
         Task<IElementHandle> QuerySelectorAsync(string selector);
 
         /// <summary>
-        /// This method scrolls element into view if needed, and then uses <seealso cref="IPage.ScreenshotDataAsync(ScreenshotOptions)"/> to take a screenshot of the element.
+        /// This method scrolls element into view if needed, and then uses to take a screenshot of the element.
         /// If the element is detached from DOM, the method throws an error.
         /// </summary>
         /// <returns>The task.</returns>
@@ -152,7 +176,7 @@ namespace PuppeteerSharp
         /// If path is a relative path, then it is resolved relative to current working directory. If no path is provided,
         /// the image won't be saved to the disk.</param>
         /// <param name="options">Screenshot options.</param>
-        Task ScreenshotAsync(string file, ScreenshotOptions options);
+        Task ScreenshotAsync(string file, ElementScreenshotOptions options);
 
         /// <summary>
         /// This method scrolls element into view if needed, and then uses <seealso cref="PuppeteerSharp.IPage.ScreenshotBase64Async(ScreenshotOptions)"/> to take a screenshot of the element.
@@ -167,7 +191,7 @@ namespace PuppeteerSharp
         /// </summary>
         /// <returns>Task which resolves to a <see cref="string"/> containing the image data as base64.</returns>
         /// <param name="options">Screenshot options.</param>
-        Task<string> ScreenshotBase64Async(ScreenshotOptions options);
+        Task<string> ScreenshotBase64Async(ElementScreenshotOptions options);
 
         /// <summary>
         /// This method scrolls element into view if needed, and then uses <seealso cref="PuppeteerSharp.IPage.ScreenshotDataAsync(ScreenshotOptions)"/> to take a screenshot of the element.
@@ -182,7 +206,7 @@ namespace PuppeteerSharp
         /// </summary>
         /// <returns>Task which resolves to a <see cref="byte"/>[] containing the image data.</returns>
         /// <param name="options">Screenshot options.</param>
-        Task<byte[]> ScreenshotDataAsync(ScreenshotOptions options);
+        Task<byte[]> ScreenshotDataAsync(ElementScreenshotOptions options);
 
         /// <summary>
         /// This method scrolls element into view if needed, and then uses <seealso cref="PuppeteerSharp.IPage.ScreenshotDataAsync(ScreenshotOptions)"/> to take a screenshot of the element.
@@ -197,7 +221,7 @@ namespace PuppeteerSharp
         /// </summary>
         /// <returns>Task which resolves to a <see cref="Stream"/> containing the image data.</returns>
         /// <param name="options">Screenshot options.</param>
-        Task<Stream> ScreenshotStreamAsync(ScreenshotOptions options);
+        Task<Stream> ScreenshotStreamAsync(ElementScreenshotOptions options);
 
         /// <summary>
         /// Triggers a `change` and `input` event once all the provided options have been selected.
@@ -274,6 +298,19 @@ namespace PuppeteerSharp
         /// </summary>
         /// <param name="expression">Expression to evaluate <see href="https://developer.mozilla.org/en-US/docs/Web/API/Document/evaluate"/>.</param>
         /// <returns>Task which resolves to an array of <see cref="IElementHandle"/>.</returns>
+        [Obsolete("Use " + nameof(QuerySelectorAsync) + " instead")]
         Task<IElementHandle[]> XPathAsync(string expression);
+
+        /// <summary>
+        /// Checks if an element is visible using the same mechanism as <see cref="WaitForSelectorAsync"/>.
+        /// </summary>
+        /// <returns>Task which resolves to true if the element is visible.</returns>
+        Task<bool> IsVisibleAsync();
+
+        /// <summary>
+        /// Checks if an element is hidden using the same mechanism as <see cref="WaitForSelectorAsync"/>.
+        /// </summary>
+        /// <returns>Task which resolves to true if the element is hidden.</returns>
+        Task<bool> IsHiddenAsync();
     }
 }

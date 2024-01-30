@@ -4,31 +4,32 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PuppeteerSharp.Tests.Attributes;
-using PuppeteerSharp.Xunit;
-using Xunit;
-using Xunit.Abstractions;
+using PuppeteerSharp.Nunit;
+using NUnit.Framework;
 
 namespace PuppeteerSharp.Tests.DefaultBrowserContextTests
 {
-    [Collection(TestConstants.TestFixtureCollectionName)]
-    public class BrowserTargetEventsTests : PuppeteerBrowserBaseTest
+    public class BrowserTargetEventsTests : PuppeteerBaseTest
     {
-        public BrowserTargetEventsTests(ITestOutputHelper output) : base(output)
+        public BrowserTargetEventsTests(): base()
         {
         }
 
         [PuppeteerTest("defaultbrowsercontext.spec.ts", "Browser target events", "should work")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldWork()
         {
+            using var browser = await Puppeteer.LaunchAsync(TestConstants.DefaultBrowserOptions());
+
             var events = new List<string>();
-            Browser.TargetCreated += (_, _) => events.Add("CREATED");
-            Browser.TargetChanged += (_, _) => events.Add("CHANGED");
-            Browser.TargetDestroyed += (_, _) => events.Add("DESTROYED");
-            var page = await Browser.NewPageAsync();
+            browser.TargetCreated += (_, _) => events.Add("CREATED");
+            browser.TargetChanged += (_, _) => events.Add("CHANGED");
+            browser.TargetDestroyed += (_, _) => events.Add("DESTROYED");
+            var page = await browser.NewPageAsync();
             await page.GoToAsync(TestConstants.EmptyPage);
             await page.CloseAsync();
-            Assert.Equal(new[] { "CREATED", "CHANGED", "DESTROYED" }, events);
+
+            Assert.AreEqual(new[] { "CREATED", "CHANGED", "DESTROYED" }, events);
         }
     }
 }

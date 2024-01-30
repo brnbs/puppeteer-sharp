@@ -60,6 +60,11 @@ namespace PuppeteerSharp
         string Name { get; }
 
         /// <summary>
+        ///  The <see cref="IPage"/> associated with the frame.
+        /// </summary>
+        IPage Page { get; }
+
+        /// <summary>
         /// Gets the parent frame, if any. Detached frames and main frames return <c>null</c>.
         /// </summary>
         IFrame ParentFrame { get; }
@@ -207,12 +212,6 @@ namespace PuppeteerSharp
         /// <returns>Task which resolves to the HTML content.</returns>
         /// <seealso cref="IPage.GetContentAsync"/>
         Task<string> GetContentAsync();
-
-        /// <summary>
-        /// Gets the <see cref="IExecutionContext"/> associated with the frame.
-        /// </summary>
-        /// <returns><see cref="IExecutionContext"/> associated with the frame.</returns>
-        Task<IExecutionContext> GetExecutionContextAsync();
 
         /// <summary>
         /// Returns page's title.
@@ -381,7 +380,6 @@ namespace PuppeteerSharp
         /// <param name="options">Optional waiting parameters.</param>
         /// <returns>A task that resolves when element specified by selector string is added to DOM.
         /// Resolves to `null` if waiting for `hidden: true` and selector is not found in DOM.</returns>
-        /// <seealso cref="WaitForXPathAsync(string, WaitForSelectorOptions)"/>
         /// <seealso cref="IPage.WaitForSelectorAsync(string, WaitForSelectorOptions)"/>
         /// <exception cref="WaitTaskTimeoutException">If timeout occurred.</exception>
         Task<IElementHandle> WaitForSelectorAsync(string selector, WaitForSelectorOptions options = null);
@@ -421,8 +419,8 @@ namespace PuppeteerSharp
         /// </code>
         /// </example>
         /// <seealso cref="WaitForSelectorAsync(string, WaitForSelectorOptions)"/>
-        /// <seealso cref="IPage.WaitForXPathAsync(string, WaitForSelectorOptions)"/>
         /// <exception cref="WaitTaskTimeoutException">If timeout occurred.</exception>
+        [Obsolete("Use " + nameof(WaitForSelectorAsync) + " instead")]
         Task<IElementHandle> WaitForXPathAsync(string xpath, WaitForSelectorOptions options = null);
 
         /// <summary>
@@ -430,7 +428,23 @@ namespace PuppeteerSharp
         /// </summary>
         /// <param name="expression">Expression to evaluate <see href="https://developer.mozilla.org/en-US/docs/Web/API/Document/evaluate"/>.</param>
         /// <returns>Task which resolves to an array of <see cref="IElementHandle"/>.</returns>
-        /// <seealso cref="IPage.XPathAsync(string)"/>
+        [Obsolete("Use " + nameof(QuerySelectorAsync) + " instead")]
         Task<IElementHandle[]> XPathAsync(string expression);
+
+        /// <summary>
+        /// This method is typically coupled with an action that triggers a device
+        /// request from an api such as WebBluetooth.
+        ///
+        /// Caution.
+        ///
+        /// This must be called before the device request is made. It will not return a
+        /// currently active device prompt.
+        /// </summary>
+        /// <example>
+        /// <code source="../PuppeteerSharp.Tests/DeviceRequestPromptTests/WaitForDevicePromptTests.cs" region="IFrameWaitForDevicePromptAsyncUsage" lang="csharp"/>
+        /// </example>
+        /// <param name="options">Optional waiting parameters.</param>
+        /// <returns>A task that resolves after the page gets the prompt.</returns>
+        Task<DeviceRequestPrompt> WaitForDevicePromptAsync(WaitForOptions options = null);
     }
 }

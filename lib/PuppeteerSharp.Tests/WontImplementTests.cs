@@ -1,27 +1,18 @@
-﻿using System;
-using System.Threading.Tasks;
-using PuppeteerSharp.Tests.Attributes;
-using PuppeteerSharp.Xunit;
-using Xunit;
-using Xunit.Abstractions;
+﻿using PuppeteerSharp.Tests.Attributes;
+using PuppeteerSharp.Nunit;
 
 namespace PuppeteerSharp.Tests
 {
-    [Collection(TestConstants.TestFixtureCollectionName)]
     public class WontImplementTests : PuppeteerPageBaseTest
     {
-        public WontImplementTests(ITestOutputHelper output) : base(output)
-        {
-        }
-
         // We don't implement pipes
         [PuppeteerTest("chromiumonly.spec.ts", "Puppeteer.launch |pipe| option", "should support the pipe option")]
         [PuppeteerTest("chromiumonly.spec.ts", "Puppeteer.launch |pipe| option", "should support the pipe argument")]
         [PuppeteerTest("chromiumonly.spec.ts", "Puppeteer.launch |pipe| option", "should fire \"disconnected\" when closing with pipe")]
-        [PuppeteerTest("navigation.spec.ts", "should not leak listeners during navigation")]
-        [PuppeteerTest("navigation.spec.ts", "should not leak listeners during bad navigation")]
-        [PuppeteerTest("navigation.spec.ts", "should not leak listeners during navigation of 11 pages")]
-        [PuppeteerTest("navigation.spec.ts", "should throw if networkidle is passed as an option")]
+        [PuppeteerTest("navigation.spec.ts", "Page.goto", "should not leak listeners during navigation")]
+        [PuppeteerTest("navigation.spec.ts", "Page.goto", "should not leak listeners during bad navigation")]
+        [PuppeteerTest("navigation.spec.ts", "Page.goto", "should not leak listeners during navigation of 11 pages")]
+        [PuppeteerTest("navigation.spec.ts", "Page.goto", "should throw if networkidle is passed as an option")]
         [PuppeteerTest("launcher.spec.ts", "Puppeteer.launch", "should report the correct product")] //We don't use the product in this way
         [PuppeteerTest("launcher.spec.ts", "Puppeteer.launch", "falls back to launching chrome if there is an unknown product but logs a warning")]
         [PuppeteerTest("tracing.spec.ts", "Tracing", "should return null in case of Buffer error")]
@@ -37,6 +28,7 @@ namespace PuppeteerSharp.Tests
         [PuppeteerTest("EventEmitter.spec.ts", "removeAllListeners", "removes every listener from all events by default")]
         [PuppeteerTest("EventEmitter.spec.ts", "removeAllListeners", "returns the emitter for chaining")]
         [PuppeteerTest("EventEmitter.spec.ts", "removeAllListeners", "can filter to remove only listeners for a given event name")]
+        [PuppeteerTest("elementhandle.spec.ts", "Custom queries", "should work with function shorthands")]
         [PuppeteerTest("emulation.spec.ts", "Page.emulateMediaType", "should throw in case of bad argument")]
         [PuppeteerTest("emulation.spec.ts", "Page.emulateMediaFeatures", "should throw in case of bad argument")]
         [PuppeteerTest("emulation.spec.ts", "Page.emulateVisionDeficiency", "should throw for invalid vision deficiencies")]
@@ -52,8 +44,11 @@ namespace PuppeteerSharp.Tests
         [PuppeteerTest("page.spec.ts", "Page.exposeFunction", "should support throwing \"null\"")]
         [PuppeteerTest("page.spec.ts", "Page.exposeFunction", "should work with function shorthands")]
         [PuppeteerTest("elementhandle.spec.ts", "Custom queries", "should wait correctly with waitFor")]
-        [PuppeteerFact]
-        public void TheseTesstWontBeImplemented()
+        [PuppeteerTest("tracing.spec.ts", "Tracing", "should return undefined in case of Buffer error")]
+        [PuppeteerTest("DeviceRequestPrompt.test.ts", "waitForDevicePrompt", "should listen and shortcut when there are no watchdogs")]
+        [PuppeteerTest("DeviceRequestPrompt.test.ts", "DeviceRequestPrompt.waitForDevice", "should listen and shortcut when there are no watchdogs")]
+        [PuppeteerTimeout]
+        public void TheseTestWontBeImplemented()
         {
         }
     }

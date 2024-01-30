@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net.WebSockets;
+using PuppeteerSharp.BrowserData;
 using PuppeteerSharp.Transport;
 
 namespace PuppeteerSharp
@@ -12,6 +13,11 @@ namespace PuppeteerSharp
     {
         private string[] _ignoredDefaultArgs;
         private bool _devtools;
+
+        /// <summary>
+        /// Chrome Release Channel.
+        /// </summary>
+        public ChromeReleaseChannel? Channel { get; set; }
 
         /// <summary>
         /// Whether to ignore HTTPS errors during navigation. Defaults to false.
@@ -86,13 +92,13 @@ namespace PuppeteerSharp
         public bool LogProcess { get; set; }
 
         /// <summary>
-        /// If <c>true</c>, then do not use <see cref="ChromiumLauncher.DefaultArgs"/>.
+        /// If <c>true</c>, then do not use <see cref="ChromiumLauncher.GetDefaultArgs"/>.
         /// Dangerous option; use with care. Defaults to <c>false</c>.
         /// </summary>
         public bool IgnoreDefaultArgs { get; set; }
 
         /// <summary>
-        /// if <see cref="IgnoreDefaultArgs"/> is set to <c>false</c> this list will be used to filter <see cref="ChromiumLauncher.DefaultArgs"/>.
+        /// if <see cref="IgnoreDefaultArgs"/> is set to <c>false</c> this list will be used to filter <see cref="ChromiumLauncher.GetDefaultArgs"/>.
         /// </summary>
         public string[] IgnoredDefaultArgs
         {
@@ -161,9 +167,9 @@ namespace PuppeteerSharp
         public bool EnqueueTransportMessages { get; set; } = true;
 
         /// <summary>
-        /// The browser to be used (Chrome, Firefox).
+        /// The browser to be used (Chrome, Chromium, Firefox).
         /// </summary>
-        public Product Product { get; set; } = Product.Chrome;
+        public SupportedBrowser Browser { get; set; } = SupportedBrowser.Chrome;
 
         /// <summary>
         /// Affects how responses to <see cref="CDPSession.SendAsync"/> are returned to the caller. If <c>true</c> (default), the
@@ -180,6 +186,6 @@ namespace PuppeteerSharp
         /// <summary>
         /// Callback to decide if Puppeteer should connect to a given target or not.
         /// </summary>
-        public Func<TargetInfo, bool> TargetFilter { get; set; }
+        public Func<Target, bool> TargetFilter { get; set; }
     }
 }

@@ -1,18 +1,28 @@
-using System;
-
 namespace PuppeteerSharp
 {
     /// <summary>
-    /// Optional waiting parameters.
+    /// Timeout options.
     /// </summary>
-    /// <seealso cref="IPage.WaitForRequestAsync(Func{IRequest, bool}, WaitForOptions)"/>
-    /// <seealso cref="IPage.WaitForRequestAsync(string, WaitForOptions)"/>
-    /// <seealso cref="IPage.WaitForResponseAsync(string, WaitForOptions)"/>
-    /// <seealso cref="IPage.WaitForResponseAsync(Func{IResponse, bool}, WaitForOptions)"/>
     public class WaitForOptions
     {
         /// <summary>
-        /// Maximum time to wait for in milliseconds. Pass 0 to disable timeout.
+        /// Initializes a new instance of the <see cref="WaitForOptions"/> class.
+        /// </summary>
+        public WaitForOptions()
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="WaitForOptions"/> class.
+        /// </summary>
+        /// <param name="timeout">Maximum time to wait for in milliseconds. Defaults to 30000 (30 seconds). Pass 0 to disable timeout.</param>
+        public WaitForOptions(int timeout)
+        {
+            Timeout = timeout;
+        }
+
+        /// <summary>
+        /// Maximum time to wait for in milliseconds. Defaults to 30000 (30 seconds). Pass 0 to disable timeout.
         /// The default value can be changed by setting the <see cref="IPage.DefaultTimeout"/> property.
         /// </summary>
         public int? Timeout { get; set; }

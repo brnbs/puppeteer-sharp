@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using PuppeteerSharp.Input;
 using PuppeteerSharp.Tests.Attributes;
-using PuppeteerSharp.Xunit;
-using Xunit;
-using Xunit.Abstractions;
+using PuppeteerSharp.Nunit;
+using NUnit.Framework;
+using System.Runtime.InteropServices;
 
 namespace PuppeteerSharp.Tests.MouseTests
 {
-    [Collection(TestConstants.TestFixtureCollectionName)]
     public class MouseTests : PuppeteerPageBaseTest
     {
         private const string Dimensions = @"function dimensions() {
@@ -22,12 +22,12 @@ namespace PuppeteerSharp.Tests.MouseTests
             };
         }";
 
-        public MouseTests(ITestOutputHelper output) : base(output)
+        public MouseTests(): base()
         {
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should click the document")]
-        [PuppeteerFact]
+        [PuppeteerTimeout]
         public async Task ShouldClickTheDocument()
         {
             await Page.EvaluateFunctionAsync(@"() => {
@@ -47,16 +47,16 @@ namespace PuppeteerSharp.Tests.MouseTests
             await Page.Mouse.ClickAsync(50, 60);
             var e = await Page.EvaluateFunctionAsync<MouseEvent>("() => globalThis.clickPromise");
 
-            Assert.Equal("click", e.Type);
-            Assert.Equal(1, e.Detail);
-            Assert.Equal(50, e.ClientX);
-            Assert.Equal(60, e.ClientY);
+            Assert.AreEqual("click", e.Type);
+            Assert.AreEqual(1, e.Detail);
+            Assert.AreEqual(50, e.ClientX);
+            Assert.AreEqual(60, e.ClientY);
             Assert.True(e.IsTrusted);
-            Assert.Equal(0, e.Button);
+            Assert.AreEqual(0, e.Button);
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should resize the textarea")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldResizeTheTextarea()
         {
             await Page.GoToAsync(TestConstants.ServerUrl + "/input/textarea.html");
@@ -67,12 +67,12 @@ namespace PuppeteerSharp.Tests.MouseTests
             await mouse.MoveAsync(dimensions.X + dimensions.Width + 100, dimensions.Y + dimensions.Height + 100);
             await mouse.UpAsync();
             var newDimensions = await Page.EvaluateFunctionAsync<Dimensions>(Dimensions);
-            Assert.Equal(Math.Round(dimensions.Width + 104, MidpointRounding.AwayFromZero), newDimensions.Width);
-            Assert.Equal(Math.Round(dimensions.Height + 104, MidpointRounding.AwayFromZero), newDimensions.Height);
+            Assert.AreEqual(Math.Round(dimensions.Width + 104, MidpointRounding.AwayFromZero), newDimensions.Width);
+            Assert.AreEqual(Math.Round(dimensions.Height + 104, MidpointRounding.AwayFromZero), newDimensions.Height);
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should select the text with mouse")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldSelectTheTextWithMouse()
         {
             await Page.GoToAsync(TestConstants.ServerUrl + "/input/textarea.html");
@@ -87,37 +87,37 @@ namespace PuppeteerSharp.Tests.MouseTests
             await Page.Mouse.DownAsync();
             await Page.Mouse.MoveAsync(100, 100);
             await Page.Mouse.UpAsync();
-            Assert.Equal(text, await Page.EvaluateFunctionAsync<string>(@"() => {
+            Assert.AreEqual(text, await Page.EvaluateFunctionAsync<string>(@"() => {
                 const textarea = document.querySelector('textarea');
                 return textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
             }"));
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should trigger hover state")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldTriggerHoverState()
         {
             await Page.GoToAsync(TestConstants.ServerUrl + "/input/scrollable.html");
             await Page.HoverAsync("#button-6");
-            Assert.Equal("button-6", await Page.EvaluateExpressionAsync<string>("document.querySelector('button:hover').id"));
+            Assert.AreEqual("button-6", await Page.EvaluateExpressionAsync<string>("document.querySelector('button:hover').id"));
             await Page.HoverAsync("#button-2");
-            Assert.Equal("button-2", await Page.EvaluateExpressionAsync<string>("document.querySelector('button:hover').id"));
+            Assert.AreEqual("button-2", await Page.EvaluateExpressionAsync<string>("document.querySelector('button:hover').id"));
             await Page.HoverAsync("#button-91");
-            Assert.Equal("button-91", await Page.EvaluateExpressionAsync<string>("document.querySelector('button:hover').id"));
+            Assert.AreEqual("button-91", await Page.EvaluateExpressionAsync<string>("document.querySelector('button:hover').id"));
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should trigger hover state with removed window.Node")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldTriggerHoverStateWithRemovedWindowNode()
         {
             await Page.GoToAsync(TestConstants.ServerUrl + "/input/scrollable.html");
             await Page.EvaluateExpressionAsync("delete window.Node");
             await Page.HoverAsync("#button-6");
-            Assert.Equal("button-6", await Page.EvaluateExpressionAsync("document.querySelector('button:hover').id"));
+            Assert.AreEqual("button-6", await Page.EvaluateExpressionAsync<string>("document.querySelector('button:hover').id"));
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should set modifier keys on click")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldSetModifierKeysOnClick()
         {
             await Page.GoToAsync(TestConstants.ServerUrl + "/input/scrollable.html");
@@ -145,14 +145,14 @@ namespace PuppeteerSharp.Tests.MouseTests
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should send mouse wheel events")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldSendMouseWheelEvents()
         {
             await Page.GoToAsync(TestConstants.ServerUrl + "/input/wheel.html");
             var elem = await Page.QuerySelectorAsync("div");
             var boundingBoxBefore = await elem.BoundingBoxAsync();
-            Assert.Equal(115, boundingBoxBefore.Width);
-            Assert.Equal(115, boundingBoxBefore.Height);
+            Assert.AreEqual(115, boundingBoxBefore.Width);
+            Assert.AreEqual(115, boundingBoxBefore.Height);
 
             await Page.Mouse.MoveAsync(
                 boundingBoxBefore.X + (boundingBoxBefore.Width / 2),
@@ -161,12 +161,22 @@ namespace PuppeteerSharp.Tests.MouseTests
 
             await Page.Mouse.WheelAsync(0, -100);
             var boundingBoxAfter = await elem.BoundingBoxAsync();
-            Assert.Equal(230, boundingBoxAfter.Width);
-            Assert.Equal(230, boundingBoxAfter.Height);
+
+            // We don't have this OS check upstream
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                Assert.AreEqual(345, boundingBoxAfter.Width);
+                Assert.AreEqual(345, boundingBoxAfter.Height);
+            }
+            else
+            {
+                Assert.AreEqual(230, boundingBoxAfter.Width);
+                Assert.AreEqual(230, boundingBoxAfter.Height);
+            }
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should tween mouse movement")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldTweenMouseMovement()
         {
             await Page.Mouse.MoveAsync(100, 100);
@@ -177,7 +187,7 @@ namespace PuppeteerSharp.Tests.MouseTests
                 });
             }");
             await Page.Mouse.MoveAsync(200, 300, new MoveOptions { Steps = 5 });
-            Assert.Equal(new[] {
+            Assert.AreEqual(new[] {
                 new[]{ 120, 140 },
                 new[]{ 140, 180 },
                 new[]{ 160, 220 },
@@ -187,7 +197,7 @@ namespace PuppeteerSharp.Tests.MouseTests
         }
 
         [PuppeteerTest("mouse.spec.ts", "Mouse", "should work with mobile viewports and cross process navigations")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldWorkWithMobileViewportsAndCrossProcessNavigations()
         {
             await Page.GoToAsync(TestConstants.EmptyPage);
@@ -206,11 +216,224 @@ namespace PuppeteerSharp.Tests.MouseTests
 
             await Page.Mouse.ClickAsync(30, 40);
 
-            Assert.Equal(new DomPointInternal()
+            Assert.AreEqual(new DomPointInternal()
             {
                 X = 30,
                 Y = 40
             }, await Page.EvaluateExpressionAsync<DomPointInternal>("result"));
+        }
+
+        [PuppeteerTest("mouse.spec.ts", "Mouse", "should throw if buttons are pressed incorrectly")]
+        [Skip(SkipAttribute.Targets.Firefox)]
+        public async Task ShouldThrowIfButtonsArePressedIncorrectly()
+        {
+            await Page.GoToAsync(TestConstants.EmptyPage);
+            
+            await Page.Mouse.DownAsync();
+            Assert.ThrowsAsync<PuppeteerException>(async () => await Page.Mouse.DownAsync());
+        }
+
+        [PuppeteerTest("mouse.spec.ts", "Mouse", "should not throw if clicking in parallel")]
+        [Skip(SkipAttribute.Targets.Firefox)]
+        public async Task ShouldNotThrowIfClickingInParallel()
+        {
+            await Page.GoToAsync(TestConstants.EmptyPage);
+            await AddMouseDataListenersAsync(Page);
+
+            await Task.WhenAll(
+                Page.Mouse.ClickAsync(0, 5),
+                Page.Mouse.ClickAsync(6, 10));
+
+            var data = await Page.EvaluateExpressionAsync<ClickData[]>("window.clicks");
+
+            Assert.AreEqual(
+                new ClickData[]
+                {
+                    new()
+                    {
+                        Type = "mousedown",
+                        Buttons = 1,
+                        Detail = 1,
+                        ClientX = 0,
+                        ClientY = 5,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                    new()
+                    {
+                        Type = "mouseup",
+                        Buttons = 0,
+                        Detail = 1,
+                        ClientX = 0,
+                        ClientY = 5,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                    new()
+                    {
+                        Type = "click",
+                        Buttons = 0,
+                        Detail = 1,
+                        ClientX = 0,
+                        ClientY = 5,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                },
+                data.Take(3));
+
+            Assert.AreEqual(
+                new ClickData[]
+                {
+                    new()
+                    {
+                        Type = "mousedown",
+                        Buttons = 1,
+                        Detail = 1,
+                        ClientX = 6,
+                        ClientY = 10,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                    new()
+                    {
+                        Type = "mouseup",
+                        Buttons = 0,
+                        Detail = 1,
+                        ClientX = 6,
+                        ClientY = 10,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                    new()
+                    {
+                        Type = "click",
+                        Buttons = 0,
+                        Detail = 1,
+                        ClientX = 6,
+                        ClientY = 10,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                },
+                data.Skip(3).Take(3));
+        }
+
+        [PuppeteerTest("mouse.spec.ts", "Mouse", "should reset properly")]
+        [Skip(SkipAttribute.Targets.Firefox)]
+        public async Task ShouldResetProperly()
+        {
+            await Page.GoToAsync(TestConstants.EmptyPage);
+            await Page.Mouse.MoveAsync(5, 5);
+
+            await Task.WhenAll(
+                Page.Mouse.DownAsync(new ClickOptions() { Button = MouseButton.Left }),
+                Page.Mouse.DownAsync(new ClickOptions() { Button = MouseButton.Middle }),
+                Page.Mouse.DownAsync(new ClickOptions() { Button = MouseButton.Right }));
+
+            await AddMouseDataListenersAsync(Page, true);
+            await Page.Mouse.ResetAsync();
+
+            var data = await Page.EvaluateExpressionAsync<ClickData[]>("window.clicks");
+
+            Assert.AreEqual(
+                new ClickData[]
+                {
+                    new()
+                    {
+                        Type = "mouseup",
+                        Buttons = 6,
+                        Detail = 1,
+                        ClientX = 5,
+                        ClientY = 5,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                    new()
+                    {
+                        Type = "click",
+                        Buttons = 6,
+                        Detail = 1,
+                        ClientX = 5,
+                        ClientY = 5,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                    new()
+                    {
+                        Type = "mouseup",
+                        Buttons = 2,
+                        Detail = 0,
+                        ClientX = 5,
+                        ClientY = 5,
+                        IsTrusted = true,
+                        Button = 1,
+                    },
+                    new()
+                    {
+                        Type = "mouseup",
+                        Buttons = 0,
+                        Detail = 0,
+                        ClientX = 5,
+                        ClientY = 5,
+                        IsTrusted = true,
+                        Button = 2,
+                    },
+                    new()
+                    {
+                        Type = "mousemove",
+                        Buttons = 0,
+                        Detail = 0,
+                        ClientX = 0,
+                        ClientY = 0,
+                        IsTrusted = true,
+                        Button = 0,
+                    },
+                },
+                data);
+        }
+
+        private Task AddMouseDataListenersAsync(IPage page, bool includeMove = false)
+        {
+            return Page.EvaluateFunctionAsync(@"(includeMove) => {
+                const clicks = [];
+                const mouseEventListener = (event) => {
+                    clicks.push({
+                        type: event.type,
+                        detail: event.detail,
+                        clientX: event.clientX,
+                        clientY: event.clientY,
+                        isTrusted: event.isTrusted,
+                        button: event.button,
+                        buttons: event.buttons,
+                    });
+                };
+                document.addEventListener('mousedown', mouseEventListener);
+                if (includeMove) {
+                    document.addEventListener('mousemove', mouseEventListener);
+                }
+                document.addEventListener('mouseup', mouseEventListener);
+                document.addEventListener('click', mouseEventListener);
+                window.clicks = clicks;
+            }",
+            includeMove);
+        }
+
+        internal struct ClickData
+        {
+            public string Type { get; set; }
+
+            public int Detail { get; set; }
+
+            public int ClientX { get; set; }
+
+            public int ClientY { get; set; }
+
+            public bool IsTrusted { get; set; }
+
+            public int Button { get; set; }
+
+            public int Buttons { get; set; }
         }
 
         internal struct WheelEventInternal

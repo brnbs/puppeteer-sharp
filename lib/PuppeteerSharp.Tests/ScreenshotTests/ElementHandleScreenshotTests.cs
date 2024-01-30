@@ -1,21 +1,15 @@
 ﻿using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using PuppeteerSharp.Tests.Attributes;
-using PuppeteerSharp.Xunit;
-using Xunit;
-using Xunit.Abstractions;
+using PuppeteerSharp.Nunit;
+using NUnit.Framework;
 
 namespace PuppeteerSharp.Tests.ScreenshotTests
 {
-    [Collection(TestConstants.TestFixtureCollectionName)]
     public class ElementHandleScreenshotTests : PuppeteerPageBaseTest
     {
-        public ElementHandleScreenshotTests(ITestOutputHelper output) : base(output)
-        {
-        }
-
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should work")]
-        [PuppeteerFact]
+        [PuppeteerTimeout]
         public async Task ShouldWork()
         {
             #region SetViewportAsync
@@ -33,7 +27,7 @@ namespace PuppeteerSharp.Tests.ScreenshotTests
         }
 
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should take into account padding and border")]
-        [PuppeteerFact]
+        [PuppeteerTimeout]
         public async Task ShouldTakeIntoAccountPaddingAndBorder()
         {
             await Page.SetViewportAsync(new ViewPortOptions
@@ -58,7 +52,7 @@ namespace PuppeteerSharp.Tests.ScreenshotTests
         }
 
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should capture full element when larger than viewport")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldCaptureFullElementWhenLargerThanViewport()
         {
             await Page.SetViewportAsync(new ViewPortOptions
@@ -84,12 +78,12 @@ namespace PuppeteerSharp.Tests.ScreenshotTests
             var elementHandle = await Page.QuerySelectorAsync("div.to-screenshot");
             var screenshot = await elementHandle.ScreenshotDataAsync();
             Assert.True(ScreenshotHelper.PixelMatch("screenshot-element-larger-than-viewport.png", screenshot));
-            Assert.Equal(JToken.FromObject(new { w = 500, h = 500 }),
+            Assert.AreEqual(JToken.FromObject(new { w = 500, h = 500 }),
                 await Page.EvaluateExpressionAsync("({ w: window.innerWidth, h: window.innerHeight })"));
         }
 
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should scroll element into view")]
-        [PuppeteerFact]
+        [PuppeteerTimeout]
         public async Task ShouldScrollElementIntoView()
         {
             await Page.SetViewportAsync(new ViewPortOptions
@@ -120,7 +114,7 @@ namespace PuppeteerSharp.Tests.ScreenshotTests
         }
 
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should work with a rotated element")]
-        [PuppeteerFact]
+        [PuppeteerTimeout]
         public async Task ShouldWorkWithARotatedElement()
         {
             await Page.SetViewportAsync(new ViewPortOptions
@@ -143,29 +137,29 @@ namespace PuppeteerSharp.Tests.ScreenshotTests
         }
 
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should fail to screenshot a detached element")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldFailToScreenshotADetachedElement()
         {
             await Page.SetContentAsync("<h1>remove this</h1>");
             var elementHandle = await Page.QuerySelectorAsync("h1");
             await Page.EvaluateFunctionAsync("element => element.remove()", elementHandle);
 
-            var exception = await Assert.ThrowsAsync<PuppeteerException>(elementHandle.ScreenshotStreamAsync);
-            Assert.Equal("Node is either not visible or not an HTMLElement", exception.Message);
+            var exception = Assert.ThrowsAsync<PuppeteerException>(elementHandle.ScreenshotStreamAsync);
+            Assert.AreEqual("Node is either not visible or not an HTMLElement", exception!.Message);
         }
 
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should not hang with zero width/height element")]
-        [PuppeteerFact]
+        [PuppeteerTimeout]
         public async Task ShouldNotHangWithZeroWidthHeightElement()
         {
             await Page.SetContentAsync(@"<div style='width: 50px; height: 0'></div>");
             var elementHandle = await Page.QuerySelectorAsync("div");
-            var exception = await Assert.ThrowsAsync<PuppeteerException>(elementHandle.ScreenshotDataAsync);
-            Assert.Equal("Node has 0 height.", exception.Message);
+            var exception = Assert.ThrowsAsync<PuppeteerException>(elementHandle.ScreenshotDataAsync);
+            Assert.AreEqual("Node has 0 height.", exception!.Message);
         }
 
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should work for an element with fractional dimensions")]
-        [PuppeteerFact]
+        [PuppeteerTimeout]
         public async Task ShouldWorkForAnElementWithFractionalDimensions()
         {
             await Page.SetContentAsync("<div style=\"width:48.51px;height:19.8px;border:1px solid black;\"></div>");
@@ -175,13 +169,28 @@ namespace PuppeteerSharp.Tests.ScreenshotTests
         }
 
         [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should work for an element with an offset")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldWorkForAnElementWithAnOffset()
         {
             await Page.SetContentAsync("<div style=\"position:absolute; top: 10.3px; left: 20.4px;width:50.3px;height:20.2px;border:1px solid black;\"></div>");
             var elementHandle = await Page.QuerySelectorAsync("div");
             var screenshot = await elementHandle.ScreenshotDataAsync();
             Assert.True(ScreenshotHelper.PixelMatch("screenshot-element-fractional-offset.png", screenshot));
+        }
+
+        [PuppeteerTest("screenshot.spec.ts", "ElementHandle.screenshot", "should work with a null viewport")]
+        [Skip(SkipAttribute.Targets.Firefox)]
+        public async Task ShouldWorkWithANullViewport()
+        {
+            var options = TestConstants.DefaultBrowserOptions();
+            options.DefaultViewport = null;
+            await using var browser = await Puppeteer.LaunchAsync(options);
+            var page = await browser.NewPageAsync();
+            await page.GoToAsync(TestConstants.ServerUrl + "/grid.html");
+            await page.EvaluateExpressionAsync("window.scrollBy(50, 100)");
+            var elementHandle = await page.QuerySelectorAsync(".box:nth-of-type(3)");
+            var screenshot = await elementHandle.ScreenshotDataAsync();
+            Assert.Greater(screenshot.Length, 0);
         }
     }
 }

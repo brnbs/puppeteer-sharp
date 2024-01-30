@@ -3,26 +3,25 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using PuppeteerSharp.Tests.Attributes;
-using PuppeteerSharp.Xunit;
-using Xunit;
-using Xunit.Abstractions;
+using PuppeteerSharp.Nunit;
+using NUnit.Framework;
+using System.Linq;
 
 namespace PuppeteerSharp.Tests.FixturesTests
 {
-    [Collection(TestConstants.TestFixtureCollectionName)]
     public class FixturesTests : PuppeteerBaseTest
     {
-        public FixturesTests(ITestOutputHelper output) : base(output) { }
+        public FixturesTests(): base() { }
 
         [PuppeteerTest("fixtures.spec.ts", "Fixtures", "should dump browser process stderr")]
-        [SkipBrowserFact(skipFirefox: true)]
-        public async Task ShouldDumpBrowserProcessStderr()
+        [Skip(SkipAttribute.Targets.Firefox)]
+        public void ShouldDumpBrowserProcessStderr()
         {
             var success = false;
-            using var browserFetcher = new BrowserFetcher(Product.Chrome);
+            using var browserFetcher = new BrowserFetcher(SupportedBrowser.Chrome);
             using var process = GetTestAppProcess(
                 "PuppeteerSharp.Tests.DumpIO",
-                $"\"{(await browserFetcher.GetRevisionInfoAsync().ConfigureAwait(false)).ExecutablePath}\"");
+                $"\"{browserFetcher.GetInstalledBrowsers().First().GetExecutablePath()}\"");
 
             process.ErrorDataReceived += (_, e) =>
             {
@@ -35,13 +34,13 @@ namespace PuppeteerSharp.Tests.FixturesTests
             Assert.True(success);
         }
 
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldCloseTheBrowserWhenTheConnectedProcessCloses()
         {
             var browserClosedTaskWrapper = new TaskCompletionSource<bool>();
-            using var browserFetcher = new BrowserFetcher(Product.Chrome);
+            using var browserFetcher = new BrowserFetcher(SupportedBrowser.Chrome);
             var ChromiumLauncher = new ChromiumLauncher(
-                (await browserFetcher.GetRevisionInfoAsync()).ExecutablePath,
+                browserFetcher.GetInstalledBrowsers().First().GetExecutablePath(),
                 new LaunchOptions { Headless = true });
 
             await ChromiumLauncher.StartAsync().ConfigureAwait(false);
@@ -63,7 +62,7 @@ namespace PuppeteerSharp.Tests.FixturesTests
         }
 
         [PuppeteerTest("fixtures.spec.ts", "Fixtures", "should close the browser when the node process closes")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldCloseTheBrowserWhenTheLaunchedProcessCloses()
         {
             var browserClosedTaskWrapper = new TaskCompletionSource<bool>();
@@ -132,7 +131,7 @@ namespace PuppeteerSharp.Tests.FixturesTests
                 dir,
                 "bin",
                 build,
-                "net6.0");
+                "net8.0");
 #else
             return Path.Combine(
                 TestUtils.FindParentDirectory("lib"),

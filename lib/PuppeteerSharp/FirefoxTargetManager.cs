@@ -1,9 +1,10 @@
-﻿#pragma warning disable CS0067 // Temporal, do not merge with this
+#pragma warning disable CS0067 // Temporal, do not merge with this
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using PuppeteerSharp.Helpers;
 using PuppeteerSharp.Helpers.Json;
 using PuppeteerSharp.Messaging;
 
@@ -13,27 +14,25 @@ namespace PuppeteerSharp
     {
         private readonly Connection _connection;
         private readonly Func<TargetInfo, CDPSession, Target> _targetFactoryFunc;
-        private readonly Func<TargetInfo, bool> _targetFilterFunc;
+        private readonly Func<Target, bool> _targetFilterFunc;
         private readonly ILogger<FirefoxTargetManager> _logger;
-        private readonly ConcurrentDictionary<ICDPConnection, List<TargetInterceptor>> _targetInterceptors = new();
-        private readonly ConcurrentDictionary<string, Target> _availableTargetsByTargetId = new();
+        private readonly AsyncDictionaryHelper<string, Target> _availableTargetsByTargetId = new("Target {0} not found");
         private readonly ConcurrentDictionary<string, Target> _availableTargetsBySessionId = new();
         private readonly ConcurrentDictionary<string, TargetInfo> _discoveredTargetsByTargetId = new();
         private readonly TaskCompletionSource<bool> _initializeCompletionSource = new();
-        private readonly List<string> _ignoredTargets = new();
-        private List<string> _targetsIdsForInit = new();
+        private List<string> _targetsIdsForInit = [];
 
         public FirefoxTargetManager(
             Connection connection,
             Func<TargetInfo, CDPSession, Target> targetFactoryFunc,
-            Func<TargetInfo, bool> targetFilterFunc)
+            Func<Target, bool> targetFilterFunc)
         {
             _connection = connection;
             _targetFilterFunc = targetFilterFunc;
             _targetFactoryFunc = targetFactoryFunc;
+            _logger = _connection.LoggerFactory.CreateLogger<FirefoxTargetManager>();
             _connection.MessageReceived += OnMessageReceived;
             _connection.SessionDetached += Connection_SessionDetached;
-            _logger = _connection.LoggerFactory.CreateLogger<FirefoxTargetManager>();
         }
 
         public event EventHandler<TargetChangedArgs> TargetAvailable;
@@ -44,41 +43,22 @@ namespace PuppeteerSharp
 
         public event EventHandler<TargetChangedArgs> TargetDiscovered;
 
-        public void AddTargetInterceptor(CDPSession session, TargetInterceptor interceptor)
-        {
-            lock (_targetInterceptors)
-            {
-                _targetInterceptors.TryGetValue(session, out var interceptors);
-
-                if (interceptors == null)
-                {
-                    interceptors = new List<TargetInterceptor>();
-                    _targetInterceptors.TryAdd(session, interceptors);
-                }
-
-                interceptors.Add(interceptor);
-            }
-        }
-
-        public void RemoveTargetInterceptor(CDPSession session, TargetInterceptor interceptor)
-        {
-            _targetInterceptors.TryGetValue(session, out var interceptors);
-
-            interceptors?.Remove(interceptor);
-        }
-
         public async Task InitializeAsync()
         {
             await _connection.SendAsync("Target.setDiscoverTargets", new TargetSetDiscoverTargetsRequest
             {
                 Discover = true,
+                Filter = new[]
+                {
+                    new TargetSetDiscoverTargetsRequest.DiscoverFilter(),
+                },
             }).ConfigureAwait(false);
 
-            _targetsIdsForInit = new List<string>(_discoveredTargetsByTargetId.Keys);
+            _targetsIdsForInit = [.._discoveredTargetsByTargetId.Keys];
             await _initializeCompletionSource.Task.ConfigureAwait(false);
         }
 
-        public ConcurrentDictionary<string, Target> GetAvailableTargets() => _availableTargetsByTargetId;
+        public AsyncDictionaryHelper<string, Target> GetAvailableTargets() => _availableTargetsByTargetId;
 
         private void OnMessageReceived(object sender, MessageEventArgs e)
         {
@@ -107,37 +87,39 @@ namespace PuppeteerSharp
         }
 
         private void Connection_SessionDetached(object sender, SessionEventArgs e)
-        {
-            e.Session.MessageReceived -= OnMessageReceived;
-            _targetInterceptors.TryRemove(e.Session, out var _);
-        }
+            => e.Session.MessageReceived -= OnMessageReceived;
 
         private void OnTargetCreated(TargetCreatedResponse e)
         {
-            if (_discoveredTargetsByTargetId.ContainsKey(e.TargetInfo.TargetId))
+            if (!_discoveredTargetsByTargetId.TryAdd(e.TargetInfo.TargetId, e.TargetInfo))
             {
                 return;
             }
-
-            _discoveredTargetsByTargetId[e.TargetInfo.TargetId] = e.TargetInfo;
 
             if (e.TargetInfo.Type == TargetType.Browser && e.TargetInfo.Attached)
             {
                 var browserTarget = _targetFactoryFunc(e.TargetInfo, null);
-                _availableTargetsByTargetId[e.TargetInfo.TargetId] = browserTarget;
+                browserTarget.Initialize();
+                _availableTargetsByTargetId.AddItem(e.TargetInfo.TargetId, browserTarget);
                 FinishInitializationIfReady(e.TargetInfo.TargetId);
             }
 
-            if (_targetFilterFunc != null && !_targetFilterFunc(e.TargetInfo))
+            var target = _targetFactoryFunc(e.TargetInfo, null);
+            if (_targetFilterFunc != null && !_targetFilterFunc(target))
             {
-                _ignoredTargets.Add(e.TargetInfo.TargetId);
                 FinishInitializationIfReady(e.TargetInfo.TargetId);
                 return;
             }
 
-            var target = _targetFactoryFunc(e.TargetInfo, null);
-            _availableTargetsByTargetId[e.TargetInfo.TargetId] = target;
-            TargetAvailable?.Invoke(this, new TargetChangedArgs { TargetInfo = e.TargetInfo });
+            target.Initialize();
+            _availableTargetsByTargetId.AddItem(e.TargetInfo.TargetId, target);
+            TargetAvailable?.Invoke(
+                this,
+                new TargetChangedArgs
+                {
+                    Target = target,
+                    TargetInfo = e.TargetInfo,
+                });
             FinishInitializationIfReady(target.TargetId);
         }
 
@@ -146,7 +128,7 @@ namespace PuppeteerSharp
             _discoveredTargetsByTargetId.TryRemove(e.TargetId, out var targetInfo);
             FinishInitializationIfReady(e.TargetId);
 
-            if (_availableTargetsByTargetId.TryRemove(e.TargetId, out var target))
+            if (_availableTargetsByTargetId.TryGetValue(e.TargetId, out var target))
             {
                 TargetGone?.Invoke(this, new TargetChangedArgs { Target = target, TargetInfo = targetInfo });
             }
@@ -154,27 +136,15 @@ namespace PuppeteerSharp
 
         private void OnAttachedToTarget(object sender, TargetAttachedToTargetResponse e)
         {
-            var parent = sender as ICDPConnection;
+            var parentSession = sender as CDPSession;
             var targetInfo = e.TargetInfo;
             var session = _connection.GetSession(e.SessionId) ?? throw new PuppeteerException($"Session {e.SessionId} was not created.");
-            var existingTarget = _availableTargetsByTargetId.TryGetValue(targetInfo.TargetId, out var target);
+            _availableTargetsByTargetId.TryGetValue(targetInfo.TargetId, out var target);
             session.MessageReceived += OnMessageReceived;
-
+            session.Target = target;
             _availableTargetsBySessionId.TryAdd(session.Id, target);
 
-            if (_targetInterceptors.TryGetValue(parent, out var interceptors))
-            {
-                foreach (var interceptor in interceptors)
-                {
-                    Target parentTarget = null;
-                    if (parent is CDPSession parentSession && !_availableTargetsBySessionId.TryGetValue(parentSession.Id, out parentTarget))
-                    {
-                        throw new PuppeteerException("Parent session not found in attached targets");
-                    }
-
-                    interceptor(target, parentTarget);
-                }
-            }
+            parentSession?.OnSessionReady(session);
         }
 
         private void FinishInitializationIfReady(string targetId = null)

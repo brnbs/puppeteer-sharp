@@ -10,6 +10,7 @@ using Newtonsoft.Json.Linq;
 using PuppeteerSharp.Helpers;
 using PuppeteerSharp.Helpers.Json;
 using PuppeteerSharp.Messaging;
+using PuppeteerSharp.QueryHandlers;
 using PuppeteerSharp.Transport;
 
 namespace PuppeteerSharp
@@ -22,9 +23,8 @@ namespace PuppeteerSharp
         private readonly ILogger _logger;
         private readonly TaskQueue _callbackQueue = new();
 
-        private readonly ConcurrentDictionary<int, MessageTask> _callbacks;
-        private readonly ConcurrentDictionary<string, CDPSession> _sessions;
-        private readonly AsyncDictionaryHelper<string, CDPSession> _asyncSessions;
+        private readonly ConcurrentDictionary<int, MessageTask> _callbacks = new();
+        private readonly AsyncDictionaryHelper<string, CDPSession> _sessions = new("Session {0} not found");
         private readonly List<string> _manuallyAttached = new();
         private int _lastId;
 
@@ -37,12 +37,10 @@ namespace PuppeteerSharp
 
             _logger = LoggerFactory.CreateLogger<Connection>();
 
+            MessageQueue = new AsyncMessageQueue(enqueueAsyncMessages, _logger);
+
             Transport.MessageReceived += Transport_MessageReceived;
             Transport.Closed += Transport_Closed;
-            _callbacks = new ConcurrentDictionary<int, MessageTask>();
-            _sessions = new ConcurrentDictionary<string, CDPSession>();
-            MessageQueue = new AsyncMessageQueue(enqueueAsyncMessages, _logger);
-            _asyncSessions = new AsyncDictionaryHelper<string, CDPSession>(_sessions, "Session {0} not found");
         }
 
         /// <summary>
@@ -96,6 +94,13 @@ namespace PuppeteerSharp
 
         internal AsyncMessageQueue MessageQueue { get; }
 
+        // The connection is a good place to keep the state of custom queries and injectors.
+        // Although I consider that the Browser class would be a better place for this,
+        // The connection is being shared between all the components involved in one browser instance
+        internal CustomQuerySelectorRegistry CustomQuerySelectorRegistry { get; } = new();
+
+        internal ScriptInjector ScriptInjector { get; } = new();
+
         /// <inheritdoc />
         public void Dispose()
         {
@@ -112,6 +117,7 @@ namespace PuppeteerSharp
             }
 
             var id = GetMessageID();
+            var message = GetMessage(id, method, args);
 
             MessageTask callback = null;
             if (waitForCallback)
@@ -120,11 +126,12 @@ namespace PuppeteerSharp
                 {
                     TaskWrapper = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously),
                     Method = method,
+                    Message = message,
                 };
                 _callbacks[id] = callback;
             }
 
-            await RawSendASync(id, method, args).ConfigureAwait(false);
+            await RawSendAsync(message).ConfigureAwait(false);
             return waitForCallback ? await callback.TaskWrapper.Task.ConfigureAwait(false) : null;
         }
 
@@ -153,15 +160,16 @@ namespace PuppeteerSharp
 
         internal int GetMessageID() => Interlocked.Increment(ref _lastId);
 
-        internal Task RawSendASync(int id, string method, object args, string sessionId = null)
+        internal Task RawSendAsync(string message)
         {
-            var message = JsonConvert.SerializeObject(
-                new ConnectionRequest { Id = id, Method = method, Params = args, SessionId = sessionId },
-                JsonHelper.DefaultJsonSerializerSettings);
             _logger.LogTrace("Send ► {Message}", message);
-
             return Transport.SendAsync(message);
         }
+
+        internal string GetMessage(int id, string method, object args, string sessionId = null)
+            => JsonConvert.SerializeObject(
+                new ConnectionRequest { Id = id, Method = method, Params = args, SessionId = sessionId },
+                JsonHelper.DefaultJsonSerializerSettings);
 
         internal bool IsAutoAttached(string targetId)
             => !_manuallyAttached.Contains(targetId);
@@ -219,8 +227,6 @@ namespace PuppeteerSharp
 
         internal CDPSession GetSession(string sessionId) => _sessions.GetValueOrDefault(sessionId);
 
-        internal Task<CDPSession> GetSessionAsync(string sessionId) => _asyncSessions.GetItemAsync(sessionId);
-
         /// <summary>
         /// Releases all resource used by the <see cref="Connection"/> object.
         /// It will raise the <see cref="Disconnected"/> event and dispose <see cref="Transport"/>.
@@ -240,8 +246,21 @@ namespace PuppeteerSharp
             _callbackQueue.Dispose();
         }
 
+        private Task<CDPSession> GetSessionAsync(string sessionId) => _sessions.GetItemAsync(sessionId);
+
         private async void Transport_MessageReceived(object sender, MessageReceivedEventArgs e)
-            => await _callbackQueue.Enqueue(() => ProcessMessage(e)).ConfigureAwait(false);
+        {
+            try
+            {
+                await _callbackQueue.Enqueue(() => ProcessMessage(e)).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                // We could just catch ObjectDisposedException but as this is an event listener
+                // we don't want to crash the whole process.
+                _logger.LogError(exception, $"Failed to process message {e.Message}");
+            }
+        }
 
         private async Task ProcessMessage(MessageReceivedEventArgs e)
         {
@@ -261,7 +280,7 @@ namespace PuppeteerSharp
                 }
                 catch (JsonException exc)
                 {
-                    _logger.LogError(exc, "Failed to deserialize response", response);
+                    _logger.LogError(exc, "Failed to deserialize response");
                     return;
                 }
 
@@ -285,9 +304,9 @@ namespace PuppeteerSharp
             {
                 var sessionId = param.SessionId;
                 var session = new CDPSession(this, param.TargetInfo.Type, sessionId);
-                _asyncSessions.AddItem(sessionId, session);
+                _sessions.AddItem(sessionId, session);
 
-                SessionAttached?.Invoke(this, new SessionEventArgs { Session = session });
+                SessionAttached?.Invoke(this, new SessionEventArgs(session));
 
                 if (obj.SessionId != null && _sessions.TryGetValue(obj.SessionId, out var parentSession))
                 {
@@ -300,7 +319,12 @@ namespace PuppeteerSharp
                 if (_sessions.TryRemove(sessionId, out var session) && !session.IsClosed)
                 {
                     session.Close("Target.detachedFromTarget");
-                    SessionDetached?.Invoke(this, new SessionEventArgs() { Session = session });
+                    SessionDetached?.Invoke(this, new SessionEventArgs(session));
+
+                    if (_sessions.TryGetValue(sessionId, out var parentSession))
+                    {
+                        parentSession.OnSessionDetached(session);
+                    }
                 }
             }
 

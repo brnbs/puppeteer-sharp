@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+	</PropertyGroup>
+	<ItemGroup>
+	  <PackageReference Include="NUnit" Version="3.13.3" />
+	</ItemGroup>
+	<Import Project="../Common/SignAssembly.props" />
+</Project>

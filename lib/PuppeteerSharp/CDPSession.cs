@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -12,15 +13,13 @@ namespace PuppeteerSharp
     /// <inheritdoc/>
     public class CDPSession : ICDPSession
     {
-        private readonly ConcurrentDictionary<int, MessageTask> _callbacks;
+        private readonly ConcurrentDictionary<int, MessageTask> _callbacks = new();
 
         internal CDPSession(Connection connection, TargetType targetType, string sessionId)
         {
             Connection = connection;
             TargetType = targetType;
             Id = sessionId;
-
-            _callbacks = new ConcurrentDictionary<int, MessageTask>();
         }
 
         /// <inheritdoc/>
@@ -29,7 +28,13 @@ namespace PuppeteerSharp
         /// <inheritdoc/>
         public event EventHandler Disconnected;
 
-        internal event EventHandler<SessionEventArgs> SessionAttached;
+        /// <inheritdoc/>
+        public event EventHandler<SessionEventArgs> SessionAttached;
+
+        /// <inheritdoc/>
+        public event EventHandler<SessionEventArgs> SessionDetached;
+
+        internal event EventHandler<SessionEventArgs> Ready;
 
         /// <inheritdoc/>
         public TargetType TargetType { get; }
@@ -46,8 +51,9 @@ namespace PuppeteerSharp
         /// <inheritdoc/>
         public ILoggerFactory LoggerFactory => Connection.LoggerFactory;
 
-        /// <inheritdoc cref="Connection"/>
         internal Connection Connection { get; private set; }
+
+        internal Target Target { get; set; }
 
         /// <inheritdoc/>
         public async Task<T> SendAsync<T>(string method, object args = null)
@@ -61,13 +67,16 @@ namespace PuppeteerSharp
         {
             if (Connection == null)
             {
-                throw new PuppeteerException(
+                throw new TargetClosedException(
                     $"Protocol error ({method}): Session closed. " +
                     $"Most likely the {TargetType} has been closed." +
-                    $"Close reason: {CloseReason}");
+                    $"Close reason: {CloseReason}",
+                    CloseReason);
             }
 
             var id = Connection.GetMessageID();
+            var message = Connection.GetMessage(id, method, args, Id);
+
             MessageTask callback = null;
             if (waitForCallback)
             {
@@ -75,13 +84,14 @@ namespace PuppeteerSharp
                 {
                     TaskWrapper = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously),
                     Method = method,
+                    Message = message,
                 };
                 _callbacks[id] = callback;
             }
 
             try
             {
-                await Connection.RawSendASync(id, method, args, Id).ConfigureAwait(false);
+                await Connection.RawSendAsync(message).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -108,10 +118,9 @@ namespace PuppeteerSharp
             });
         }
 
-        internal void Send(string method, object args = null)
-            => _ = SendAsync(method, args, false);
-
         internal bool HasPendingCallbacks() => !_callbacks.IsEmpty;
+
+        internal void OnSessionReady(CDPSession session) => Ready?.Invoke(this, new SessionEventArgs(session));
 
         internal void OnMessage(ConnectionResponse obj)
         {
@@ -155,6 +164,11 @@ namespace PuppeteerSharp
         }
 
         internal void OnSessionAttached(CDPSession session)
-            => SessionAttached?.Invoke(this, new SessionEventArgs { Session = session });
+            => SessionAttached?.Invoke(this, new SessionEventArgs(session));
+
+        internal void OnSessionDetached(CDPSession session)
+            => SessionDetached?.Invoke(this, new SessionEventArgs(session));
+
+        internal IEnumerable<MessageTask> GetPendingMessages() => _callbacks.Values;
     }
 }

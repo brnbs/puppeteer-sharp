@@ -9,7 +9,6 @@ namespace PuppeteerSharp.Tests
 {
     public static class TestConstants
     {
-        public const string TestFixtureCollectionName = "PuppeteerLoaderFixture collection";
         public const int DebuggerAttachedTestTimeout = 300_000;
         public const int DefaultTestTimeout = 60_000;
         public const int DefaultPuppeteerTimeout = 10_000;
@@ -20,6 +19,7 @@ namespace PuppeteerSharp.Tests
         public const string HttpsPrefix = "https://localhost:8082";
         public const string AboutBlank = "about:blank";
         public static readonly string CrossProcessHttpPrefix = "http://127.0.0.1:8081";
+        public static readonly string CrossProcessHttpsPrefix = "https://127.0.0.1:8082";
         public static readonly string EmptyPage = $"{ServerUrl}/empty.html";
         public static readonly string CrossProcessUrl = ServerIpUrl;
         public static readonly string ExtensionPath = Path.Combine(AppContext.BaseDirectory, "Assets", "simple-extension");
@@ -46,7 +46,7 @@ namespace PuppeteerSharp.Tests
             Headless = Convert.ToBoolean(
                 Environment.GetEnvironmentVariable("HEADLESS") ??
                 (System.Diagnostics.Debugger.IsAttached ? "false" : "true")),
-            Product = IsChrome ? Product.Chrome : Product.Firefox,
+            Browser = IsChrome ? SupportedBrowser.Chrome : SupportedBrowser.Firefox,
             EnqueueAsyncMessages = Convert.ToBoolean(Environment.GetEnvironmentVariable("ENQUEUE_ASYNC_MESSAGES") ?? "false"),
             Timeout = 0,
             LogProcess = true,

@@ -79,7 +79,7 @@ namespace PuppeteerSharp
         /// <summary>
         /// Paper margins, defaults to none.
         /// </summary>
-        public MarginOptions MarginOptions { get; set; } = new MarginOptions();
+        public MarginOptions MarginOptions { get; set; } = new();
 
         /// <summary>
         /// Give any CSS <c>@page</c> size declared in the page priority over what is declared in <c>width</c> and <c>height</c> or <c>format</c> options.
@@ -91,6 +91,11 @@ namespace PuppeteerSharp
         /// Hides default white background and allows generating pdfs with transparency.
         /// </summary>
         public bool OmitBackground { get; set; }
+
+        /// <summary>
+        /// Generate tagged (accessible) PDF.
+        /// </summary>
+        public bool Tagged { get; set; }
 
         /// <summary>Overriding == operator for <see cref="PdfOptions"/>.</summary>
         /// <param name="left">the value to compare against <paramref name="right" />.</param>

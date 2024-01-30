@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 
 namespace PuppeteerSharp
 {
@@ -37,6 +36,16 @@ namespace PuppeteerSharp
         /// Occurs when the connection is closed.
         /// </summary>
         event EventHandler Disconnected;
+
+        /// <summary>
+        /// Occurs when the session is attached to the target.
+        /// </summary>
+        event EventHandler<SessionEventArgs> SessionAttached;
+
+        /// <summary>
+        /// Occurs when the session is detached from the target.
+        /// </summary>
+        event EventHandler<SessionEventArgs> SessionDetached;
 
         /// <summary>
         /// Connection close reason.

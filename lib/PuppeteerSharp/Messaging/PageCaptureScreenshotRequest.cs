@@ -9,5 +9,11 @@ namespace PuppeteerSharp.Messaging
         public int Quality { get; set; }
 
         public Clip Clip { get; set; }
+
+        public bool CaptureBeyondViewport { get; set; }
+
+        public bool? FromSurface { get; set; }
+
+        public bool? OptimizeForSpeed { get; set; }
     }
 }

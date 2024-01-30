@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using PuppeteerSharp.Helpers;
-using PuppeteerSharp.Helpers.Json;
 using PuppeteerSharp.Messaging;
 
 namespace PuppeteerSharp
@@ -21,34 +20,30 @@ namespace PuppeteerSharp
 
         private readonly ConcurrentDictionary<string, BrowserContext> _contexts;
         private readonly ILogger<Browser> _logger;
-        private readonly Func<TargetInfo, bool> _targetFilterCallback;
-        private readonly Func<TargetInfo, bool> _isPageTargetFunc;
+        private readonly Func<Target, bool> _targetFilterCallback;
         private readonly BrowserContext _defaultContext;
-        private readonly CustomQueriesManager _customQueriesManager = new();
-        private readonly Func<Task> _closeCallback;
         private Task _closeTask;
 
         internal Browser(
-            Product? product,
+            SupportedBrowser browser,
             Connection connection,
             string[] contextIds,
             bool ignoreHTTPSErrors,
             ViewPortOptions defaultViewport,
             LauncherBase launcher,
-            Func<Task> closeCallback = null,
-            Func<TargetInfo, bool> targetFilter = null,
-            Func<TargetInfo, bool> isPageTargetFunc = null)
+            Func<Target, bool> targetFilter = null,
+            Func<Target, bool> isPageTargetFunc = null)
         {
+            BrowserType = browser;
             IgnoreHTTPSErrors = ignoreHTTPSErrors;
             DefaultViewport = defaultViewport;
-            ScreenshotTaskQueue = new TaskQueue();
             Launcher = launcher;
             Connection = connection;
-            _closeCallback = closeCallback;
-            _targetFilterCallback = targetFilter ?? ((TargetInfo _) => true);
-            _isPageTargetFunc =
+            _targetFilterCallback = targetFilter ?? ((Target _) => true);
+            _logger = Connection.LoggerFactory.CreateLogger<Browser>();
+            IsPageTargetFunc =
                 isPageTargetFunc ??
-                new Func<TargetInfo, bool>((TargetInfo target) =>
+                new Func<Target, bool>((Target target) =>
                 {
                     return
                         target.Type == TargetType.Page ||
@@ -57,11 +52,11 @@ namespace PuppeteerSharp
                 });
 
             _defaultContext = new BrowserContext(Connection, this, null);
-            _contexts = new ConcurrentDictionary<string, BrowserContext>(contextIds.ToDictionary(
-                contextId => contextId,
-                contextId => new BrowserContext(Connection, this, contextId)));
+            _contexts = new ConcurrentDictionary<string, BrowserContext>(
+                contextIds.Select(contextId =>
+                    new KeyValuePair<string, BrowserContext>(contextId, new(Connection, this, contextId))));
 
-            if (product == Product.Firefox || product == Product.FirefoxPlaywright)
+            if (browser == SupportedBrowser.Firefox || browser == SupportedBrowser.FirefoxPlaywright)
             {
                 TargetManager = new FirefoxTargetManager(
                         connection,
@@ -73,10 +68,9 @@ namespace PuppeteerSharp
                 TargetManager = new ChromeTargetManager(
                     connection,
                     CreateTarget,
-                    _targetFilterCallback);
+                    _targetFilterCallback,
+                    launcher?.Options?.Timeout ?? Puppeteer.DefaultTimeout);
             }
-
-            _logger = Connection.LoggerFactory.CreateLogger<Browser>();
         }
 
         /// <inheritdoc/>
@@ -99,6 +93,9 @@ namespace PuppeteerSharp
 
         /// <inheritdoc/>
         public string WebSocketEndpoint => Connection.Url;
+
+        /// <inheritdoc/>
+        public SupportedBrowser BrowserType { get; }
 
         /// <inheritdoc/>
         public Process Process => Launcher?.Process;
@@ -132,7 +129,7 @@ namespace PuppeteerSharp
         /// <inheritdoc/>
         public ITarget Target => Targets().FirstOrDefault(t => t.Type == TargetType.Browser);
 
-        internal TaskQueue ScreenshotTaskQueue { get; set; }
+        internal TaskQueue ScreenshotTaskQueue { get; } = new();
 
         internal Connection Connection { get; }
 
@@ -140,20 +137,27 @@ namespace PuppeteerSharp
 
         internal LauncherBase Launcher { get; set; }
 
-        internal CustomQueriesManager CustomQueriesManager => _customQueriesManager;
-
         internal ITargetManager TargetManager { get; }
+
+        internal Func<Target, bool> IsPageTargetFunc { get; set; }
 
         /// <inheritdoc/>
         public Task<IPage> NewPageAsync() => _defaultContext.NewPageAsync();
 
         /// <inheritdoc/>
-        public ITarget[] Targets() => TargetManager.GetAvailableTargets().Values.ToArray();
+        public ITarget[] Targets()
+            => TargetManager.GetAvailableTargets().Values.ToArray();
 
         /// <inheritdoc/>
-        public async Task<IBrowserContext> CreateIncognitoBrowserContextAsync()
+        public async Task<IBrowserContext> CreateIncognitoBrowserContextAsync(BrowserContextOptions options = null)
         {
-            var response = await Connection.SendAsync<CreateBrowserContextResponse>("Target.createBrowserContext", null).ConfigureAwait(false);
+            var response = await Connection.SendAsync<CreateBrowserContextResponse>(
+                "Target.createBrowserContext",
+                new TargetCreateBrowserContextRequest
+                {
+                    ProxyServer = options?.ProxyServer ?? string.Empty,
+                    ProxyBypassList = string.Join(",", options?.ProxyBypassList ?? Array.Empty<string>()),
+                }).ConfigureAwait(false);
             var context = new BrowserContext(Connection, this, response.BrowserContextId);
             _contexts.TryAdd(response.BrowserContextId, context);
             return context;
@@ -203,12 +207,6 @@ namespace PuppeteerSharp
             }
 
             var timeout = options?.Timeout ?? DefaultWaitForTimeout;
-            var existingTarget = Targets().FirstOrDefault(predicate);
-            if (existingTarget != null)
-            {
-                return existingTarget;
-            }
-
             var targetCompletionSource = new TaskCompletionSource<ITarget>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             void TargetHandler(object sender, TargetChangedArgs e)
@@ -221,16 +219,14 @@ namespace PuppeteerSharp
 
             try
             {
-                foreach (var target in Targets())
-                {
-                    if (predicate(target))
-                    {
-                        return target;
-                    }
-                }
-
                 TargetCreated += TargetHandler;
                 TargetChanged += TargetHandler;
+
+                var existingTarget = Targets().FirstOrDefault(predicate);
+                if (existingTarget != null)
+                {
+                    return existingTarget;
+                }
 
                 return await targetCompletionSource.Task.WithTimeout(timeout).ConfigureAwait(false);
             }
@@ -243,15 +239,27 @@ namespace PuppeteerSharp
 
         /// <inheritdoc/>
         public void RegisterCustomQueryHandler(string name, CustomQueryHandler queryHandler)
-            => CustomQueriesManager.RegisterCustomQueryHandler(name, queryHandler);
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("Custom query handler name must not be empty", nameof(name));
+            }
+
+            if (queryHandler == null)
+            {
+                throw new ArgumentNullException(nameof(queryHandler));
+            }
+
+            Connection.CustomQuerySelectorRegistry.RegisterCustomQueryHandler(name, queryHandler);
+        }
 
         /// <inheritdoc/>
         public void UnregisterCustomQueryHandler(string name)
-            => CustomQueriesManager.UnregisterCustomQueryHandler(name);
+            => Connection.CustomQuerySelectorRegistry.UnregisterCustomQueryHandler(name);
 
         /// <inheritdoc/>
         public void ClearCustomQueryHandlers()
-            => CustomQueriesManager.ClearCustomQueryHandlers();
+            => Connection.CustomQuerySelectorRegistry.ClearCustomQueryHandlers();
 
         /// <inheritdoc />
         public void Dispose()
@@ -273,25 +281,23 @@ namespace PuppeteerSharp
         }
 
         internal static async Task<Browser> CreateAsync(
-            Product? product,
+            SupportedBrowser browserToCreate,
             Connection connection,
             string[] contextIds,
             bool ignoreHTTPSErrors,
             ViewPortOptions defaultViewPort,
             LauncherBase launcher,
-            Func<Task> closeCallback = null,
-            Func<TargetInfo, bool> targetFilter = null,
-            Func<TargetInfo, bool> isPageTargetCallback = null,
+            Func<Target, bool> targetFilter = null,
+            Func<Target, bool> isPageTargetCallback = null,
             Action<IBrowser> initAction = null)
         {
             var browser = new Browser(
-                product,
+                browserToCreate,
                 connection,
                 contextIds,
                 ignoreHTTPSErrors,
                 defaultViewPort,
                 launcher,
-                closeCallback,
                 targetFilter,
                 isPageTargetCallback);
 
@@ -310,7 +316,7 @@ namespace PuppeteerSharp
         }
 
         internal IEnumerable<string> GetCustomQueryHandlerNames()
-            => CustomQueriesManager.GetCustomQueryHandlerNames();
+            => Connection.CustomQuerySelectorRegistry.GetCustomQueryHandlerNames();
 
         internal async Task<IPage> CreatePageInContextAsync(string contextId)
         {
@@ -326,7 +332,7 @@ namespace PuppeteerSharp
 
             var targetId = (await Connection.SendAsync<TargetCreateTargetResponse>("Target.createTarget", createTargetRequest)
                 .ConfigureAwait(false)).TargetId;
-            var target = TargetManager.GetAvailableTargets()[targetId];
+            var target = await TargetManager.GetAvailableTargets().GetItemAsync(targetId).ConfigureAwait(false);
             await target.InitializedTask.ConfigureAwait(false);
             return await target.PageAsync().ConfigureAwait(false);
         }
@@ -353,27 +359,21 @@ namespace PuppeteerSharp
         private void TargetManager_TargetDiscovered(object sender, TargetChangedArgs e)
             => TargetDiscovered?.Invoke(this, e);
 
-        private void TargetManager_TargetChanged(object sender, TargetChangedArgs e)
+        private void OnTargetChanged(object sender, TargetChangedArgs e)
         {
-            var previousURL = e.Target.Url;
-            var wasInitialized = e.Target.IsInitialized;
-            e.Target.TargetInfoChanged(e.TargetInfo);
-            if (wasInitialized && previousURL != e.Target.Url)
-            {
-                var args = new TargetChangedArgs { Target = e.Target };
-                TargetChanged?.Invoke(this, args);
-                e.Target.BrowserContext.OnTargetChanged(this, args);
-            }
+            var args = new TargetChangedArgs { Target = e.Target };
+            TargetChanged?.Invoke(this, args);
+            e.Target.BrowserContext.OnTargetChanged(this, args);
         }
 
-        private async void TargetManager_TargetGone(object sender, TargetChangedArgs e)
+        private async void OnDetachedFromTargetAsync(object sender, TargetChangedArgs e)
         {
             try
             {
-                e.Target.InitializedTaskWrapper.TrySetResult(false);
+                e.Target.InitializedTaskWrapper.TrySetResult(InitializationStatus.Aborted);
                 e.Target.CloseTaskWrapper.TrySetResult(true);
 
-                if (await e.Target.InitializedTask.ConfigureAwait(false))
+                if ((await e.Target.InitializedTask.ConfigureAwait(false)) == InitializationStatus.Success)
                 {
                     var args = new TargetChangedArgs { Target = e.Target };
                     TargetDestroyed?.Invoke(this, args);
@@ -388,11 +388,11 @@ namespace PuppeteerSharp
             }
         }
 
-        private async void TargetManager_TargetAvailable(object sender, TargetChangedArgs e)
+        private async void OnAttachedToTargetAsync(object sender, TargetChangedArgs e)
         {
             try
             {
-                if (await e.Target.InitializedTask.ConfigureAwait(false))
+                if (await e.Target.InitializedTask.ConfigureAwait(false) == InitializationStatus.Success)
                 {
                     var args = new TargetChangedArgs { Target = e.Target };
                     TargetCreated?.Invoke(this, args);
@@ -466,9 +466,9 @@ namespace PuppeteerSharp
         private Task AttachAsync()
         {
             Connection.Disconnected += Connection_Disconnected;
-            TargetManager.TargetAvailable += TargetManager_TargetAvailable;
-            TargetManager.TargetGone += TargetManager_TargetGone;
-            TargetManager.TargetChanged += TargetManager_TargetChanged;
+            TargetManager.TargetAvailable += OnAttachedToTargetAsync;
+            TargetManager.TargetGone += OnDetachedFromTargetAsync;
+            TargetManager.TargetChanged += OnTargetChanged;
             TargetManager.TargetDiscovered += TargetManager_TargetDiscovered;
             return TargetManager.InitializeAsync();
         }
@@ -476,9 +476,9 @@ namespace PuppeteerSharp
         private void Detach()
         {
             Connection.Disconnected -= Connection_Disconnected;
-            TargetManager.TargetAvailable -= TargetManager_TargetAvailable;
-            TargetManager.TargetGone -= TargetManager_TargetGone;
-            TargetManager.TargetChanged -= TargetManager_TargetChanged;
+            TargetManager.TargetAvailable -= OnAttachedToTargetAsync;
+            TargetManager.TargetGone -= OnDetachedFromTargetAsync;
+            TargetManager.TargetChanged -= OnTargetChanged;
             TargetManager.TargetDiscovered -= TargetManager_TargetDiscovered;
         }
 
@@ -491,16 +491,52 @@ namespace PuppeteerSharp
                 context = _defaultContext;
             }
 
-            return new Target(
+            Func<bool, Task<CDPSession>> createSession = (bool isAutoAttachEmulated) => Connection.CreateSessionAsync(targetInfo, isAutoAttachEmulated);
+
+            var otherTarget = new OtherTarget(
                 targetInfo,
                 session,
                 context,
                 TargetManager,
-                (bool isAutoAttachEmulated) => Connection.CreateSessionAsync(targetInfo, isAutoAttachEmulated),
-                IgnoreHTTPSErrors,
-                DefaultViewport,
-                ScreenshotTaskQueue,
-                _isPageTargetFunc);
+                createSession);
+
+            if (targetInfo.Url?.StartsWith("devtools://", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return new DevToolsTarget(
+                    targetInfo,
+                    session,
+                    context,
+                    TargetManager,
+                    createSession,
+                    IgnoreHTTPSErrors,
+                    DefaultViewport,
+                    ScreenshotTaskQueue);
+            }
+
+            if (IsPageTargetFunc(otherTarget))
+            {
+                return new PageTarget(
+                    targetInfo,
+                    session,
+                    context,
+                    TargetManager,
+                    createSession,
+                    IgnoreHTTPSErrors,
+                    DefaultViewport,
+                    ScreenshotTaskQueue);
+            }
+
+            if (targetInfo.Type == TargetType.ServiceWorker || targetInfo.Type == TargetType.SharedWorker)
+            {
+                return new WorkerTarget(
+                    targetInfo,
+                    session,
+                    context,
+                    TargetManager,
+                    createSession);
+            }
+
+            return otherTarget;
         }
     }
 }

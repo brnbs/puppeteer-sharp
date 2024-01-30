@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using PuppeteerSharp.Messaging.Protocol.Network;
 
 namespace PuppeteerSharp.Messaging
 {
@@ -12,10 +12,12 @@ namespace PuppeteerSharp.Messaging
 
         public ResponsePayload RedirectResponse { get; set; }
 
-        public ResourceType Type { get; set; }
+        public ResourceType? Type { get; set; }
 
         public string FrameId { get; set; }
 
         public bool RedirectHasExtraInfo { get; set; }
+
+        public Initiator Initiator { get; set; }
     }
 }

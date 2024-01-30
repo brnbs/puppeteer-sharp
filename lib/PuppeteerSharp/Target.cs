@@ -12,70 +12,25 @@ namespace PuppeteerSharp
     [DebuggerDisplay("Target {Type} - {Url}")]
     public class Target : ITarget
     {
-        private readonly Func<bool, Task<CDPSession>> _sessionFactory;
-        private readonly bool _ignoreHTTPSErrors;
-        private readonly ViewPortOptions _defaultViewport;
-        private readonly TaskQueue _screenshotTaskQueue;
-        private readonly Func<TargetInfo, bool> _isPageTargetFunc;
-        private Task<Worker> _workerTask;
-
         internal Target(
             TargetInfo targetInfo,
             CDPSession session,
             BrowserContext context,
             ITargetManager targetManager,
-            Func<bool, Task<CDPSession>> sessionFactory,
-            bool ignoreHTTPSErrors,
-            ViewPortOptions defaultViewport,
-            TaskQueue screenshotTaskQueue,
-            Func<TargetInfo, bool> isPageTargetFunc)
+            Func<bool, Task<CDPSession>> sessionFactory)
         {
             Session = session;
             TargetInfo = targetInfo;
-            _isPageTargetFunc = isPageTargetFunc;
-            _sessionFactory = sessionFactory;
-            _ignoreHTTPSErrors = ignoreHTTPSErrors;
-            _defaultViewport = defaultViewport;
-            _screenshotTaskQueue = screenshotTaskQueue;
+            SessionFactory = sessionFactory;
             BrowserContext = context;
-            PageTask = null;
             TargetManager = targetManager;
 
-            _ = InitializedTaskWrapper.Task.ContinueWith(
-                async initializedTask =>
-                {
-                    var success = initializedTask.Result;
-                    if (!success)
-                    {
-                        return;
-                    }
-
-                    var opener = Opener as Target;
-
-                    var openerPageTask = opener?.PageTask;
-                    if (openerPageTask == null || Type != TargetType.Page)
-                    {
-                        return;
-                    }
-
-                    var openerPage = (Page)await openerPageTask.ConfigureAwait(false);
-                    if (!openerPage.HasPopupEventListeners)
-                    {
-                        return;
-                    }
-
-                    var popupPage = await PageAsync().ConfigureAwait(false);
-                    openerPage.OnPopup(popupPage);
-                },
-                TaskScheduler.Default);
-
-            CloseTaskWrapper = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            IsInitialized = !_isPageTargetFunc(TargetInfo) || !string.IsNullOrEmpty(TargetInfo.Url);
-
-            if (IsInitialized)
+            if (session != null)
             {
-                InitializedTaskWrapper.TrySetResult(true);
+                session.Target = this;
             }
+
+            Initialize();
         }
 
         /// <inheritdoc/>
@@ -89,25 +44,27 @@ namespace PuppeteerSharp
 
         /// <inheritdoc/>
         public ITarget Opener => TargetInfo.OpenerId != null ?
-            ((Browser)Browser).TargetManager.GetAvailableTargets().GetValueOrDefault(TargetInfo.OpenerId) : null;
+            Browser.TargetManager.GetAvailableTargets().GetValueOrDefault(TargetInfo.OpenerId) : null;
 
         /// <inheritdoc/>
-        public IBrowser Browser => BrowserContext.Browser;
+        IBrowser ITarget.Browser => Browser;
 
         /// <inheritdoc/>
         IBrowserContext ITarget.BrowserContext => BrowserContext;
 
         internal BrowserContext BrowserContext { get; }
 
-        internal Task<bool> InitializedTask => InitializedTaskWrapper.Task;
+        internal Browser Browser => BrowserContext.Browser;
 
-        internal TaskCompletionSource<bool> InitializedTaskWrapper { get; } = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal Task<InitializationStatus> InitializedTask => InitializedTaskWrapper.Task;
+
+        internal TaskCompletionSource<InitializationStatus> InitializedTaskWrapper { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         internal Task CloseTask => CloseTaskWrapper.Task;
 
-        internal TaskCompletionSource<bool> CloseTaskWrapper { get; }
+        internal TaskCompletionSource<bool> CloseTaskWrapper { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        internal Task<IPage> PageTask { get; set; }
+        internal Func<bool, Task<CDPSession>> SessionFactory { get; private set; }
 
         internal ITargetManager TargetManager { get; }
 
@@ -117,76 +74,42 @@ namespace PuppeteerSharp
 
         internal TargetInfo TargetInfo { get; set; }
 
-        /// <summary>
-        /// Returns the <see cref="IPage"/> associated with the target. If the target is not <c>"page"</c> or <c>"background_page"</c> returns <c>null</c>.
-        /// </summary>
-        /// <returns>a task that returns a <see cref="IPage"/>.</returns>
-        public Task<IPage> PageAsync()
+        /// <inheritdoc/>
+        public virtual Task<IPage> PageAsync() => Task.FromResult<IPage>(null);
+
+        /// <inheritdoc/>
+        public virtual Task<WebWorker> WorkerAsync() => Task.FromResult<WebWorker>(null);
+
+        /// <inheritdoc/>
+        public async Task<ICDPSession> CreateCDPSessionAsync()
         {
-            if (_isPageTargetFunc(TargetInfo) && PageTask == null)
-            {
-                PageTask = CreatePageAsync();
-            }
-
-            return PageTask ?? Task.FromResult<IPage>(null);
+            var session = await SessionFactory(false).ConfigureAwait(false);
+            session.Target = this;
+            return session;
         }
-
-        /// <summary>
-        /// If the target is not of type `"service_worker"` or `"shared_worker"`, returns `null`.
-        /// </summary>
-        /// <returns>A task that returns a <see cref="Worker"/>.</returns>
-        public Task<Worker> WorkerAsync()
-        {
-            if (TargetInfo.Type != TargetType.ServiceWorker && TargetInfo.Type != TargetType.SharedWorker)
-            {
-                return Task.FromResult<Worker>(null);
-            }
-
-            if (_workerTask == null)
-            {
-                _workerTask = WorkerInternalAsync();
-            }
-
-            return _workerTask;
-        }
-
-        /// <summary>
-        /// Creates a Chrome Devtools Protocol session attached to the target.
-        /// </summary>
-        /// <returns>A task that returns a <see cref="ICDPSession"/>.</returns>
-        public async Task<ICDPSession> CreateCDPSessionAsync() => await _sessionFactory(false).ConfigureAwait(false);
 
         internal void TargetInfoChanged(TargetInfo targetInfo)
         {
             TargetInfo = targetInfo;
-
-            if (!IsInitialized && (TargetInfo.Type != TargetType.Page || !string.IsNullOrEmpty(TargetInfo.Url)))
-            {
-                IsInitialized = true;
-                InitializedTaskWrapper.TrySetResult(true);
-            }
+            CheckIfInitialized();
         }
 
-        private async Task<Worker> WorkerInternalAsync()
+        /// <summary>
+        /// Initializes the target.
+        /// </summary>
+        internal virtual void Initialize()
         {
-            var client = Session ?? await _sessionFactory(false).ConfigureAwait(false);
-            return new Worker(
-                client,
-                TargetInfo.Url,
-                (_, _, _) => Task.CompletedTask,
-                _ => { });
+            IsInitialized = true;
+            InitializedTaskWrapper.TrySetResult(InitializationStatus.Success);
         }
 
-        private async Task<IPage> CreatePageAsync()
+        /// <summary>
+        /// Check is the target is not initialized.
+        /// </summary>
+        protected internal virtual void CheckIfInitialized()
         {
-            var session = Session ?? await _sessionFactory(true).ConfigureAwait(false);
-
-            return await Page.CreateAsync(
-                session,
-                this,
-                _ignoreHTTPSErrors,
-                _defaultViewport,
-                _screenshotTaskQueue).ConfigureAwait(false);
+            IsInitialized = true;
+            InitializedTaskWrapper.TrySetResult(InitializationStatus.Success);
         }
     }
 }

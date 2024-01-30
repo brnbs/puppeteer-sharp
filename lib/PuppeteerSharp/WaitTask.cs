@@ -7,30 +7,28 @@ namespace PuppeteerSharp
 {
     internal sealed class WaitTask : IDisposable
     {
-        private readonly IsolatedWorld _isolatedWorld;
+        private readonly Realm _realm;
         private readonly string _fn;
         private readonly WaitForFunctionPollingOption? _polling;
         private readonly int? _pollingInterval;
         private readonly object[] _args;
         private readonly Task _timeoutTimer;
         private readonly IElementHandle _root;
-        private readonly CancellationTokenSource _cts;
-        private readonly TaskCompletionSource<IJSHandle> _result;
-        private readonly PageBinding[] _bindings;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly TaskCompletionSource<IJSHandle> _result = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         private bool _isDisposed;
         private IJSHandle _poller;
         private bool _terminated;
 
         internal WaitTask(
-            IsolatedWorld isolatedWorld,
+            Realm realm,
             string fn,
             bool isExpression,
             WaitForFunctionPollingOption polling,
             int? pollingInterval,
             int timeout,
             IElementHandle root,
-            PageBinding[] bidings = null,
             object[] args = null)
         {
             if (string.IsNullOrEmpty(fn))
@@ -43,22 +41,14 @@ namespace PuppeteerSharp
                 throw new ArgumentOutOfRangeException(nameof(pollingInterval), "Cannot poll with non-positive interval");
             }
 
-            _isolatedWorld = isolatedWorld;
+            _realm = realm;
             _fn = isExpression ? $"() => {{return ({fn});}}" : fn;
             _pollingInterval = pollingInterval;
             _polling = _pollingInterval.HasValue ? null : polling;
             _args = args ?? Array.Empty<object>();
             _root = root;
-            _cts = new CancellationTokenSource();
-            _result = new TaskCompletionSource<IJSHandle>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _bindings = bidings ?? Array.Empty<PageBinding>();
 
-            foreach (var binding in _bindings)
-            {
-                _isolatedWorld.BoundFunctions.AddOrUpdate(binding.Name, binding.Function, (_, __) => binding.Function);
-            }
-
-            _isolatedWorld.TaskManager.Add(this);
+            _realm.TaskManager.Add(this);
 
             if (timeout > 0)
             {
@@ -68,7 +58,7 @@ namespace PuppeteerSharp
                         TaskScheduler.Default);
             }
 
-            _ = Rerun();
+            _ = RerunAsync();
         }
 
         internal Task<IJSHandle> Task => _result.Task;
@@ -80,24 +70,23 @@ namespace PuppeteerSharp
                 return;
             }
 
+            if (_timeoutTimer is { Status: TaskStatus.RanToCompletion or TaskStatus.Faulted or TaskStatus.Canceled } timeoutTimer)
+            {
+                timeoutTimer.Dispose();
+            }
+
             _cts.Dispose();
 
             _isDisposed = true;
         }
 
-        internal async Task Rerun()
+        internal async Task RerunAsync()
         {
             try
             {
-                if (_bindings.Length > 0)
-                {
-                    var context = await _isolatedWorld.GetExecutionContextAsync().ConfigureAwait(false);
-                    await System.Threading.Tasks.Task.WhenAll(_bindings.Select(binding => _isolatedWorld.AddBindingToContextAsync(context, binding.Name))).ConfigureAwait(false);
-                }
-
                 if (_pollingInterval.HasValue)
                 {
-                    _poller = await _isolatedWorld.EvaluateFunctionHandleAsync(
+                    _poller = await _realm.EvaluateFunctionHandleAsync(
                             @"
                             ({IntervalPoller, createFunction}, ms, fn, ...args) => {
                                 const fun = createFunction(fn);
@@ -107,14 +96,14 @@ namespace PuppeteerSharp
                             }",
                             new object[]
                             {
-                            await _isolatedWorld.GetPuppeteerUtilAsync().ConfigureAwait(false),
-                            _pollingInterval,
-                            _fn,
+                                new LazyArg(async context => await context.GetPuppeteerUtilAsync().ConfigureAwait(false)),
+                                _pollingInterval,
+                                _fn,
                             }.Concat(_args).ToArray()).ConfigureAwait(false);
                 }
                 else if (_polling == WaitForFunctionPollingOption.Raf)
                 {
-                    _poller = await _isolatedWorld.EvaluateFunctionHandleAsync(
+                    _poller = await _realm.EvaluateFunctionHandleAsync(
                             @"
                             ({RAFPoller, createFunction}, fn, ...args) => {
                                 const fun = createFunction(fn);
@@ -124,13 +113,13 @@ namespace PuppeteerSharp
                             }",
                             new object[]
                             {
-                                await _isolatedWorld.GetPuppeteerUtilAsync().ConfigureAwait(false),
+                                new LazyArg(async context => await context.GetPuppeteerUtilAsync().ConfigureAwait(false)),
                                 _fn,
                             }.Concat(_args).ToArray()).ConfigureAwait(false);
                 }
                 else
                 {
-                    _poller = await _isolatedWorld.EvaluateFunctionHandleAsync(
+                    _poller = await _realm.EvaluateFunctionHandleAsync(
                             @"
                             ({MutationPoller, createFunction}, root, fn, ...args) => {
                                 const fun = createFunction(fn);
@@ -140,12 +129,13 @@ namespace PuppeteerSharp
                             }",
                             new object[]
                             {
-                                await _isolatedWorld.GetPuppeteerUtilAsync().ConfigureAwait(false),
+                                new LazyArg(async context => await context.GetPuppeteerUtilAsync().ConfigureAwait(false)),
                                 _root,
                                 _fn,
                             }.Concat(_args).ToArray()).ConfigureAwait(false);
                 }
 
+                // Note that FrameWaitForFunctionTests listen for this particular message to orchestrate the test execution
                 await _poller.EvaluateFunctionAsync("poller => poller.start()").ConfigureAwait(false);
 
                 var success = await _poller.EvaluateFunctionHandleAsync("poller => poller.result()").ConfigureAwait(false);
@@ -171,7 +161,7 @@ namespace PuppeteerSharp
             }
 
             _terminated = true;
-            _isolatedWorld.TaskManager.Delete(this);
+            _realm.TaskManager.Delete(this);
             Cleanup(); // This matches the clearTimeout upstream
 
             if (exception != null)
@@ -189,7 +179,7 @@ namespace PuppeteerSharp
                             await poller.stop();
                         }").ConfigureAwait(false);
 
-                        poller = null;
+                        _poller = null;
                     }
                     catch (Exception)
                     {
@@ -225,8 +215,15 @@ namespace PuppeteerSharp
             // We don't have this check upstream.
             // We have a situation in our async code where a new navigation could be executed
             // before the WaitForFunction completes its initialization
-            // See FrameWaitForSelectorTests.ShouldSurviveCrossProssNavigation
+            // See FrameWaitForSelectorTests.ShouldSurviveCrossProcessNavigation
             if (exception.Message.Contains("JSHandles can be evaluated only in the context they were created!"))
+            {
+                return null;
+            }
+
+            // This is a different message coming from Firefox in the same situation.
+            // This is not upstream.
+            if (exception.Message.Contains("Could not find object with given id"))
             {
                 return null;
             }

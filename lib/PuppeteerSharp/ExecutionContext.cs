@@ -10,14 +10,15 @@ using PuppeteerSharp.Messaging;
 
 namespace PuppeteerSharp
 {
-    /// <inheritdoc/>
-    public class ExecutionContext : IExecutionContext
+    /// <inheritdoc cref="IExecutionContext"/>
+    public sealed class ExecutionContext : IExecutionContext, IDisposable, IAsyncDisposable
     {
         internal const string EvaluationScriptUrl = "__puppeteer_evaluation_script__";
+        private const string EvaluationScriptSuffix = $"//# sourceURL={EvaluationScriptUrl}";
 
         private static readonly Regex _sourceUrlRegex = new(@"^[\040\t]*\/\/[@#] sourceURL=\s*\S*?\s*$", RegexOptions.Multiline);
-
-        private readonly string _evaluationScriptSuffix = $"//# sourceURL={EvaluationScriptUrl}";
+        private readonly TaskQueue _puppeteerUtilQueue = new();
+        private IJSHandle _puppeteerUtil;
 
         internal ExecutionContext(
             CDPSession client,
@@ -31,7 +32,7 @@ namespace PuppeteerSharp
         }
 
         /// <inheritdoc/>
-        public IFrame Frame => World?.Frame;
+        IFrame IExecutionContext.Frame => World?.Frame;
 
         internal int ContextId { get; }
 
@@ -40,6 +41,8 @@ namespace PuppeteerSharp
         internal CDPSession Client { get; }
 
         internal IsolatedWorld World { get; }
+
+        private Frame Frame => World?.Frame;
 
         /// <inheritdoc/>
         public Task<JToken> EvaluateExpressionAsync(string script) => EvaluateExpressionAsync<JToken>(script);
@@ -57,68 +60,71 @@ namespace PuppeteerSharp
             => CreateJSHandle(await EvaluateFunctionInternalAsync(false, script, args).ConfigureAwait(false));
 
         /// <inheritdoc/>
-        public Task<JToken> EvaluateFunctionAsync(string script, params object[] args) => EvaluateFunctionAsync<JToken>(script, args);
+        public Task<JToken> EvaluateFunctionAsync(string script, params object[] args)
+            => EvaluateFunctionAsync<JToken>(script, args);
 
         /// <inheritdoc/>
         public Task<T> EvaluateFunctionAsync<T>(string script, params object[] args)
             => RemoteObjectTaskToObject<T>(EvaluateFunctionInternalAsync(true, script, args));
 
-        /// <inheritdoc/>
-        public async Task<IJSHandle> QueryObjectsAsync(IJSHandle prototypeHandle)
+        /// <inheritdoc />
+        public async ValueTask DisposeAsync()
         {
-            if (prototypeHandle == null)
+            if (_puppeteerUtilQueue != null)
             {
-                throw new ArgumentNullException(nameof(prototypeHandle));
+                await _puppeteerUtilQueue.DisposeAsync().ConfigureAwait(false);
             }
 
-            if (prototypeHandle.Disposed)
+            if (_puppeteerUtil != null)
             {
-                throw new PuppeteerException("Prototype JSHandle is disposed!");
+                await _puppeteerUtil.DisposeAsync().ConfigureAwait(false);
             }
 
-            if (prototypeHandle.RemoteObject.ObjectId == null)
+            if (World != null)
             {
-                throw new PuppeteerException("Prototype JSHandle must not be referencing primitive value");
+                await World.DisposeAsync().ConfigureAwait(false);
             }
 
-            var response = await Client.SendAsync<RuntimeQueryObjectsResponse>("Runtime.queryObjects", new RuntimeQueryObjectsRequest
+            GC.SuppressFinalize(this);
+        }
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        internal async Task<IJSHandle> GetPuppeteerUtilAsync()
+        {
+            await _puppeteerUtilQueue.Enqueue(async () =>
             {
-                PrototypeObjectId = prototypeHandle.RemoteObject.ObjectId,
+                if (_puppeteerUtil == null)
+                {
+                    await Client.Connection.ScriptInjector.InjectAsync(
+                        async (script) =>
+                        {
+                            if (_puppeteerUtil != null)
+                            {
+                                await _puppeteerUtil.DisposeAsync().ConfigureAwait(false);
+                            }
+
+                            await InstallGlobalBindingAsync(new Binding(
+                                "__ariaQuerySelector",
+                                (Func<IElementHandle, string, Task<IElementHandle>>)Client.Connection.CustomQuerySelectorRegistry.InternalQueryHandlers["aria"].QueryOneAsync))
+                                .ConfigureAwait(false);
+                            _puppeteerUtil = await EvaluateExpressionHandleAsync(script).ConfigureAwait(false);
+                        },
+                        _puppeteerUtil == null).ConfigureAwait(false);
+                }
             }).ConfigureAwait(false);
-
-            return CreateJSHandle(response.Objects);
+            return _puppeteerUtil;
         }
 
         internal IJSHandle CreateJSHandle(RemoteObject remoteObject)
             => remoteObject.Subtype == RemoteObjectSubtype.Node && Frame != null
-                ? new ElementHandle(this, Client, remoteObject, Frame, ((Frame)Frame).FrameManager.Page, ((Frame)Frame).FrameManager)
-                : new JSHandle(this, Client, remoteObject);
-
-        internal async Task<IElementHandle> AdoptElementHandleAsync(IElementHandle elementHandle)
-        {
-            if (elementHandle.ExecutionContext == this)
-            {
-                throw new PuppeteerException("Cannot adopt handle that already belongs to this execution context");
-            }
-
-            if (World == null)
-            {
-                throw new PuppeteerException("Cannot adopt handle without DOMWorld");
-            }
-
-            var nodeInfo = await Client.SendAsync<DomDescribeNodeResponse>("DOM.describeNode", new DomDescribeNodeRequest
-            {
-                ObjectId = elementHandle.RemoteObject.ObjectId,
-            }).ConfigureAwait(false);
-
-            var obj = await Client.SendAsync<DomResolveNodeResponse>("DOM.resolveNode", new DomResolveNodeRequest
-            {
-                BackendNodeId = nodeInfo.Node.BackendNodeId,
-                ExecutionContextId = ContextId,
-            }).ConfigureAwait(false);
-
-            return CreateJSHandle(obj.Object) as ElementHandle;
-        }
+                ? new ElementHandle(World, remoteObject)
+                : new JSHandle(World, remoteObject);
 
         private static string GetExceptionMessage(EvaluateExceptionResponseDetails exceptionDetails)
         {
@@ -141,6 +147,27 @@ namespace PuppeteerSharp
             return message;
         }
 
+        private async Task InstallGlobalBindingAsync(Binding binding)
+        {
+            try
+            {
+                if (World != null)
+                {
+                    World.Bindings.TryAdd(binding.Name, binding);
+                    await World.AddBindingToContextAsync(this, binding.Name).ConfigureAwait(false);
+                }
+            }
+            catch
+            {
+                // If the binding cannot be added, then either the browser doesn't support
+                // bindings (e.g. Firefox) or the context is broken. Either breakage is
+                // okay, so we ignore the error.
+            }
+        }
+
+        /// <inheritdoc cref="IDisposable.Dispose" />
+        private void Dispose(bool disposing) => _ = DisposeAsync();
+
         private async Task<T> RemoteObjectTaskToObject<T>(Task<RemoteObject> remote)
         {
             var response = await remote.ConfigureAwait(false);
@@ -150,7 +177,7 @@ namespace PuppeteerSharp
         private Task<RemoteObject> EvaluateExpressionInternalAsync(bool returnByValue, string script)
             => ExecuteEvaluationAsync("Runtime.evaluate", new Dictionary<string, object>
             {
-                ["expression"] = _sourceUrlRegex.IsMatch(script) ? script : $"{script}\n{_evaluationScriptSuffix}",
+                ["expression"] = _sourceUrlRegex.IsMatch(script) ? script : $"{script}\n{EvaluationScriptSuffix}",
                 ["contextId"] = ContextId,
                 ["returnByValue"] = returnByValue,
                 ["awaitPromise"] = true,
@@ -160,7 +187,7 @@ namespace PuppeteerSharp
         private async Task<RemoteObject> EvaluateFunctionInternalAsync(bool returnByValue, string script, params object[] args)
             => await ExecuteEvaluationAsync("Runtime.callFunctionOn", new RuntimeCallFunctionOnRequest
             {
-                FunctionDeclaration = $"{script}\n{_evaluationScriptSuffix}\n",
+                FunctionDeclaration = $"{script}\n{EvaluationScriptSuffix}\n",
                 ExecutionContextId = ContextId,
                 Arguments = await Task.WhenAll(args.Select(FormatArgumentAsync).ToArray()).ConfigureAwait(false),
                 ReturnByValue = returnByValue,

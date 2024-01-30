@@ -1,16 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using PuppeteerSharp.BrowserData;
 using PuppeteerSharp.Helpers;
 using PuppeteerSharp.Helpers.Linux;
 using static PuppeteerSharp.BrowserFetcherOptions;
@@ -20,47 +18,30 @@ namespace PuppeteerSharp
     /// <inheritdoc/>
     public class BrowserFetcher : IBrowserFetcher
     {
-        /// <summary>
-        /// Default chromium revision.
-        /// </summary>
-        public const string DefaultChromiumRevision = "1069273";
-
         private const string PublishSingleFileLocalApplicationDataFolderName = "PuppeteerSharp";
 
-        private static readonly Dictionary<Product, string> _hosts = new Dictionary<Product, string>
+        private static readonly Dictionary<SupportedBrowser, Func<Platform, string, string, string>> _downloadsUrl = new()
         {
-            [Product.Chrome] = "https://storage.googleapis.com",
-            [Product.Firefox] = "https://archive.mozilla.org/pub/firefox/nightly/latest-mozilla-central",
+            [SupportedBrowser.Chrome] = Chrome.ResolveDownloadUrl,
+            [SupportedBrowser.Chromium] = Chromium.ResolveDownloadUrl,
+            [SupportedBrowser.Firefox] = Firefox.ResolveDownloadUrl,
         };
 
-        private static readonly Dictionary<(Product Product, Platform Platform), string> _downloadUrls = new()
-        {
-            [(Product.Chrome, Platform.Linux)] = "{0}/chromium-browser-snapshots/Linux_x64/{1}/{2}.zip",
-            [(Product.Chrome, Platform.MacOS)] = "{0}/chromium-browser-snapshots/Mac/{1}/{2}.zip",
-            [(Product.Chrome, Platform.Win32)] = "{0}/chromium-browser-snapshots/Win/{1}/{2}.zip",
-            [(Product.Chrome, Platform.Win64)] = "{0}/chromium-browser-snapshots/Win_x64/{1}/{2}.zip",
-            [(Product.Firefox, Platform.Linux)] = "{0}/firefox-{1}.en-US.{2}-x86_64.tar.bz2",
-            [(Product.Firefox, Platform.MacOS)] = "{0}/firefox-{1}.en-US.{2}.dmg",
-            [(Product.Firefox, Platform.Win32)] = "{0}/firefox-{1}.en-US.{2}.zip",
-            [(Product.Firefox, Platform.Win64)] = "{0}/firefox-{1}.en-US.{2}.zip",
-        };
-
-        private readonly WebClient _webClient = new WebClient();
+        private readonly WebClient _webClient = new();
         private readonly CustomFileDownloadAction _customFileDownload;
         private bool _isDisposed;
 
         /// <inheritdoc cref="BrowserFetcher"/>
         public BrowserFetcher()
         {
-            DownloadsFolder = Path.Combine(GetExecutablePath(), ".local-chromium");
-            DownloadHost = _hosts[Product.Chrome];
+            CacheDir = GetBrowsersLocation();
             Platform = GetCurrentPlatform();
-            Product = Product.Chrome;
+            Browser = SupportedBrowser.Chrome;
             _customFileDownload = _webClient.DownloadFileTaskAsync;
         }
 
         /// <inheritdoc cref="BrowserFetcher"/>
-        public BrowserFetcher(Product product) : this(new BrowserFetcherOptions { Product = product })
+        public BrowserFetcher(SupportedBrowser browser) : this(new BrowserFetcherOptions { Browser = browser })
         {
         }
 
@@ -72,12 +53,9 @@ namespace PuppeteerSharp
                 throw new ArgumentNullException(nameof(options));
             }
 
-            DownloadsFolder = string.IsNullOrEmpty(options.Path) ?
-               Path.Combine(GetExecutablePath(), options.Product == Product.Chrome ? ".local-chromium" : ".local-firefox") :
-               options.Path;
-            DownloadHost = string.IsNullOrEmpty(options.Host) ? _hosts[options.Product] : options.Host;
+            Browser = options.Browser;
+            CacheDir = string.IsNullOrEmpty(options.Path) ? GetBrowsersLocation() : options.Path;
             Platform = options.Platform ?? GetCurrentPlatform();
-            Product = options.Product;
             _customFileDownload = options.CustomFileDownload ?? _webClient.DownloadFileTaskAsync;
         }
 
@@ -85,19 +63,16 @@ namespace PuppeteerSharp
         public event DownloadProgressChangedEventHandler DownloadProgressChanged;
 
         /// <inheritdoc/>
-        public string DefaultFirefoxRevision { get; private set; } = "latest";
+        public string CacheDir { get; set; }
 
         /// <inheritdoc/>
-        public string DownloadsFolder { get; }
+        public string BaseUrl { get; set;  }
 
         /// <inheritdoc/>
-        public string DownloadHost { get; }
+        public Platform Platform { get; set; }
 
         /// <inheritdoc/>
-        public Platform Platform { get; }
-
-        /// <inheritdoc/>
-        public Product Product { get; }
+        public SupportedBrowser Browser { get; set; }
 
         /// <inheritdoc/>
         public IWebProxy WebProxy
@@ -106,80 +81,18 @@ namespace PuppeteerSharp
             set => _webClient.Proxy = value;
         }
 
-        /// <summary>
-        /// Get executable path.
-        /// </summary>
-        /// <param name="product"><see cref="Product"/>.</param>
-        /// <param name="platform"><see cref="Platform"/>.</param>
-        /// <param name="revision">chromium revision.</param>
-        /// <param name="folderPath">folder path.</param>
-        /// <returns>executable path.</returns>
-        /// <exception cref="ArgumentException">For not supported <see cref="Platform"/>.</exception>
-        public static string GetExecutablePath(Product product, Platform platform, string revision, string folderPath)
-        {
-            if (product == Product.Chrome)
-            {
-                switch (platform)
-                {
-                    case Platform.MacOS:
-                        return Path.Combine(
-                            folderPath,
-                            GetArchiveName(product, platform, revision),
-                            "Chromium.app",
-                            "Contents",
-                            "MacOS",
-                            "Chromium");
-
-                    case Platform.Linux:
-                        return Path.Combine(folderPath, GetArchiveName(product, platform, revision), "chrome");
-
-                    case Platform.Win32:
-                    case Platform.Win64:
-                        return Path.Combine(folderPath, GetArchiveName(product, platform, revision), "chrome.exe");
-
-                    default:
-                        throw new ArgumentException("Invalid platform", nameof(platform));
-                }
-            }
-            else
-            {
-                switch (platform)
-                {
-                    case Platform.MacOS:
-                        return Path.Combine(
-                            folderPath,
-                            "Firefox Nightly.app",
-                            "Contents",
-                            "MacOS",
-                            "firefox");
-
-                    case Platform.Linux:
-                        return Path.Combine(folderPath, "firefox", "firefox");
-
-                    case Platform.Win32:
-                    case Platform.Win64:
-                        return Path.Combine(folderPath, "firefox", "firefox.exe");
-
-                    default:
-                        throw new ArgumentException("Invalid platform", nameof(platform));
-                }
-            }
-        }
-
         /// <inheritdoc/>
         public async Task<bool> CanDownloadAsync(string revision)
         {
             try
             {
-                var url = GetDownloadURL(Product, Platform, DownloadHost, revision);
+                var url = GetDownloadURL(Browser, Platform, BaseUrl, revision);
 
                 var client = WebRequest.Create(url);
                 client.Proxy = _webClient.Proxy;
                 client.Method = "HEAD";
-                using (var response = (HttpWebResponse)await client.GetResponseAsync().ConfigureAwait(false))
-                {
-                    return response.StatusCode == HttpStatusCode.OK;
-                }
+                using var response = (HttpWebResponse)await client.GetResponseAsync().ConfigureAwait(false);
+                return response.StatusCode == HttpStatusCode.OK;
             }
             catch (WebException)
             {
@@ -188,69 +101,39 @@ namespace PuppeteerSharp
         }
 
         /// <inheritdoc/>
-        public IEnumerable<string> LocalRevisions()
+        public async Task<InstalledBrowser> DownloadAsync()
         {
-            var directoryInfo = new DirectoryInfo(DownloadsFolder);
+            var buildId = Browser == SupportedBrowser.Firefox
+                ? await Firefox.GetDefaultBuildIdAsync().ConfigureAwait(false)
+                : Chrome.DefaultBuildId;
 
-            if (directoryInfo.Exists)
-            {
-                return directoryInfo.GetDirectories().Select(d => GetRevisionFromPath(d.Name));
-            }
-
-            return Array.Empty<string>();
+            return await DownloadAsync(buildId).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
-        public void Remove(string revision)
+        public async Task<InstalledBrowser> DownloadAsync(BrowserTag tag)
         {
-            var directory = new DirectoryInfo(GetFolderPath(revision));
-            if (directory.Exists)
-            {
-                directory.Delete(true);
-            }
+            var revision = await ResolveBuildIdAsync(tag).ConfigureAwait(false);
+            return await DownloadAsync(revision).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
-        public async Task<RevisionInfo> GetRevisionInfoAsync()
-            => RevisionInfo(Product == Product.Chrome ? DefaultChromiumRevision : await GetDefaultFirefoxRevisionAsync().ConfigureAwait(false));
+        public IEnumerable<InstalledBrowser> GetInstalledBrowsers()
+            => new Cache(CacheDir).GetInstalledBrowsers();
 
         /// <inheritdoc/>
-        public RevisionInfo RevisionInfo(string revision)
+        public void Uninstall(string buildId)
+            => new Cache(CacheDir).Uninstall(Browser, Platform, buildId);
+
+        /// <inheritdoc/>
+        public async Task<InstalledBrowser> DownloadAsync(string buildId)
         {
-            var result = new RevisionInfo
-            {
-                FolderPath = GetFolderPath(revision),
-                Url = GetDownloadURL(Product, Platform, DownloadHost, revision),
-                Revision = revision,
-                Platform = Platform,
-            };
-            result.ExecutablePath = GetExecutablePath(Product, Platform, revision, result.FolderPath);
-            result.Local = new DirectoryInfo(result.FolderPath).Exists;
+            var url = _downloadsUrl[Browser](Platform, buildId, BaseUrl);
+            var fileName = url.Split('/').Last();
+            var cache = new Cache(CacheDir);
+            var archivePath = Path.Combine(CacheDir, fileName);
+            var downloadFolder = new DirectoryInfo(CacheDir);
 
-            return result;
-        }
-
-        /// <inheritdoc/>
-        public async Task<RevisionInfo> DownloadAsync()
-            => await DownloadAsync(
-                Product == Product.Chrome
-                ? DefaultChromiumRevision
-                : await GetDefaultFirefoxRevisionAsync().ConfigureAwait(false)).ConfigureAwait(false);
-
-        /// <inheritdoc/>
-        public async Task<RevisionInfo> DownloadAsync(string revision)
-        {
-            var url = GetDownloadURL(Product, Platform, DownloadHost, revision);
-            var filePath = Path.Combine(DownloadsFolder, url.Split('/').Last());
-            var folderPath = GetFolderPath(revision);
-            var archiveName = GetArchiveName(Product, Platform, revision);
-
-            if (new DirectoryInfo(folderPath).Exists)
-            {
-                return RevisionInfo(revision);
-            }
-
-            var downloadFolder = new DirectoryInfo(DownloadsFolder);
             if (!downloadFolder.Exists)
             {
                 downloadFolder.Create();
@@ -261,66 +144,35 @@ namespace PuppeteerSharp
                 _webClient.DownloadProgressChanged += DownloadProgressChanged;
             }
 
-            await _customFileDownload(url, filePath).ConfigureAwait(false);
+            var outputPath = cache.GetInstallationDir(Browser, Platform, buildId);
 
-            if (filePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            if (new DirectoryInfo(outputPath).Exists)
             {
-                if (Platform == Platform.MacOS)
-                {
-                    NativeExtractToDirectory(filePath, folderPath);
-                }
-                else
-                {
-                    ZipFile.ExtractToDirectory(filePath, folderPath);
-                }
-            }
-            else if (filePath.EndsWith(".tar.bz2", StringComparison.OrdinalIgnoreCase))
-            {
-                ExtractTar(filePath, folderPath);
-            }
-            else
-            {
-                await InstallDMGAsync(filePath, folderPath).ConfigureAwait(false);
+                return new InstalledBrowser(cache, Browser, buildId, Platform);
             }
 
-            new FileInfo(filePath).Delete();
-
-            if (GetCurrentPlatform() == Platform.Linux)
+            try
             {
-                var executables = new string[]
-                {
-                    "chrome",
-                    "chrome_crashpad_handler",
-                    "chrome-management-service",
-                    "chrome_sandbox", // setuid
-                    "crashpad_handler",
-                    "google-chrome",
-                    "libvulkan.so.1",
-                    "nacl_helper",
-                    "nacl_helper_bootstrap",
-                    "xdg-mime",
-                    "xdg-settings",
-                    "cron/google-chrome",
-                };
-
-                foreach (var executable in executables)
-                {
-                    var execPath = Path.Combine(folderPath, archiveName, executable);
-
-                    if (File.Exists(execPath))
-                    {
-                        var code = LinuxSysCall.Chmod(execPath, LinuxSysCall.ExecutableFilePermissions);
-
-                        if (code != 0)
-                        {
-                            throw new Exception("Chmod operation failed");
-                        }
-                    }
-                }
+                await _customFileDownload(url, archivePath).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                throw new PuppeteerException($"Failed to download {Browser} for {Platform} from {url}", ex);
             }
 
-            return RevisionInfo(revision);
+            await UnpackArchiveAsync(archivePath, outputPath, fileName).ConfigureAwait(false);
+            new FileInfo(archivePath).Delete();
+
+            return new InstalledBrowser(cache, Browser, buildId, Platform);
         }
+
+        /// <inheritdoc/>
+        public string GetExecutablePath(string buildId)
+            => new InstalledBrowser(
+                new Cache(CacheDir),
+                Browser,
+                buildId,
+                Platform).GetExecutablePath();
 
         /// <inheritdoc/>
         public void Dispose()
@@ -329,15 +181,11 @@ namespace PuppeteerSharp
             GC.SuppressFinalize(this);
         }
 
-        /// <inheritdoc/>
-        public string GetExecutablePath(string revision)
-            => GetExecutablePath(Product, Platform, revision, GetFolderPath(revision));
-
         internal static Platform GetCurrentPlatform()
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                return Platform.MacOS;
+                return RuntimeInformation.OSArchitecture == Architecture.Arm64 ? Platform.MacOSArm64 : Platform.MacOS;
             }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -353,7 +201,7 @@ namespace PuppeteerSharp
             return Platform.Unknown;
         }
 
-        internal static string GetExecutablePath()
+        internal static string GetBrowsersLocation()
         {
             var assembly = typeof(Puppeteer).Assembly;
             var assemblyName = assembly.GetName().Name + ".dll";
@@ -404,50 +252,8 @@ namespace PuppeteerSharp
             _isDisposed = true;
         }
 
-        private static string GetArchiveName(Product product, Platform platform, string revision)
-        {
-            if (product == Product.Chrome)
-            {
-                switch (platform)
-                {
-                    case Platform.Linux:
-                        return "chrome-linux";
-
-                    case Platform.MacOS:
-                        return "chrome-mac";
-
-                    case Platform.Win32:
-                    case Platform.Win64:
-                        return int.TryParse(revision, out var revValue) && revValue > 591479 ? "chrome-win" : "chrome-win32";
-
-                    default:
-                        throw new ArgumentException("Invalid platform", nameof(platform));
-                }
-            }
-            else
-            {
-                switch (platform)
-                {
-                    case Platform.Linux:
-                        return "linux";
-
-                    case Platform.MacOS:
-                        return "mac";
-
-                    case Platform.Win32:
-                        return "win32";
-
-                    case Platform.Win64:
-                        return "win64";
-
-                    default:
-                        throw new ArgumentException("Invalid platform", nameof(platform));
-                }
-            }
-        }
-
-        private static string GetDownloadURL(Product product, Platform platform, string host, string revision)
-            => string.Format(CultureInfo.CurrentCulture, _downloadUrls[(product, platform)], host, revision, GetArchiveName(product, platform, revision));
+        private static string GetDownloadURL(SupportedBrowser product, Platform platform, string baseUrl, string buildId)
+            => _downloadsUrl[product](platform, buildId, baseUrl);
 
         private static void ExtractTar(string zipPath, string folderPath)
         {
@@ -459,52 +265,6 @@ namespace PuppeteerSharp
             process.StartInfo.UseShellExecute = false;
             process.Start();
             process.WaitForExit();
-        }
-
-        private string GetFolderPath(string revision)
-            => Path.Combine(DownloadsFolder, $"{Platform}-{revision}");
-
-        private void NativeExtractToDirectory(string zipPath, string folderPath)
-        {
-            using var process = new Process();
-            process.StartInfo.FileName = "unzip";
-            process.StartInfo.Arguments = $"\"{zipPath}\" -d \"{folderPath}\"";
-            process.Start();
-            process.WaitForExit();
-        }
-
-        private string GetRevisionFromPath(string folderName)
-        {
-            var splits = folderName.Split('-');
-            if (splits.Length != 2)
-            {
-                return "0";
-            }
-
-            if (!Enum.TryParse<Platform>(splits[0], out var platform))
-            {
-                platform = Platform.Unknown;
-            }
-
-            if (!_downloadUrls.Keys.Contains((Product, platform)))
-            {
-                return "0";
-            }
-
-            return splits[1];
-        }
-
-        private async Task<string> GetDefaultFirefoxRevisionAsync()
-        {
-            if (DefaultFirefoxRevision == "latest")
-            {
-                using var client = new HttpClient();
-                var response = await client.GetStringAsync("https://product-details.mozilla.org/1.0/firefox_versions.json").ConfigureAwait(false);
-                var version = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
-                DefaultFirefoxRevision = version["FIREFOX_NIGHTLY"];
-            }
-
-            return DefaultFirefoxRevision;
         }
 
         private Task InstallDMGAsync(string dmgPath, string folderPath)
@@ -520,16 +280,13 @@ namespace PuppeteerSharp
 
                 var mountAndCopyTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                using var process = new Process
-                {
-                    EnableRaisingEvents = true,
-                };
-
+                using var process = new Process();
+                process.EnableRaisingEvents = true;
                 process.StartInfo.FileName = "hdiutil";
                 process.StartInfo.Arguments = $"attach -nobrowse -noautoopen \"{dmgPath}\"";
                 process.StartInfo.RedirectStandardOutput = true;
                 process.StartInfo.UseShellExecute = false;
-                process.OutputDataReceived += (sender, e) =>
+                process.OutputDataReceived += (_, e) =>
                 {
                     if (e.Data == null || mountAndCopyTcs.Task.IsCompleted)
                     {
@@ -552,11 +309,11 @@ namespace PuppeteerSharp
                         return;
                     }
 
-                    using var process = new Process();
-                    process.StartInfo.FileName = "cp";
-                    process.StartInfo.Arguments = $"-R \"{appFile.FullName}\" \"{folderPath}\"";
-                    process.Start();
-                    process.WaitForExit();
+                    using var copyProcess = new Process();
+                    copyProcess.StartInfo.FileName = "cp";
+                    copyProcess.StartInfo.Arguments = $"-R \"{appFile.FullName}\" \"{folderPath}\"";
+                    copyProcess.Start();
+                    copyProcess.WaitForExit();
                     mountAndCopyTcs.TrySetResult(true);
                 };
 
@@ -586,6 +343,87 @@ namespace PuppeteerSharp
             catch
             {
                 // swallow
+            }
+        }
+
+        private Task<string> ResolveBuildIdAsync(BrowserTag tag)
+        {
+            switch (Browser)
+            {
+                case SupportedBrowser.Firefox:
+                    return tag switch
+                    {
+                        BrowserTag.Latest => Firefox.ResolveBuildIdAsync("FIREFOX_NIGHTLY"),
+                        _ => throw new PuppeteerException($"{tag} is not supported for {Browser}. Use 'latest' instead."),
+                    };
+                case SupportedBrowser.Chrome:
+                    return tag switch
+                    {
+                        BrowserTag.Latest => Chrome.ResolveBuildIdAsync(ChromeReleaseChannel.Canary),
+                        BrowserTag.Beta => Chrome.ResolveBuildIdAsync(ChromeReleaseChannel.Beta),
+                        BrowserTag.Canary => Chrome.ResolveBuildIdAsync(ChromeReleaseChannel.Canary),
+                        BrowserTag.Dev => Chrome.ResolveBuildIdAsync(ChromeReleaseChannel.Dev),
+                        BrowserTag.Stable => Chrome.ResolveBuildIdAsync(ChromeReleaseChannel.Stable),
+                        _ => throw new PuppeteerException($"{tag} is not supported for {Browser}."),
+                    };
+                case SupportedBrowser.Chromium:
+                    return tag switch
+                    {
+                        BrowserTag.Latest => Chromium.ResolveBuildIdAsync(Platform),
+                        _ => throw new PuppeteerException($"{tag} is not supported for {Browser}. Use 'latest' instead."),
+                    };
+                default:
+                    throw new PuppeteerException($"{Browser} not supported.");
+            }
+        }
+
+        private async Task UnpackArchiveAsync(string archivePath, string outputPath, string archiveName)
+        {
+            if (archivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                ZipFile.ExtractToDirectory(archivePath, outputPath);
+            }
+            else if (archivePath.EndsWith(".tar.bz2", StringComparison.OrdinalIgnoreCase))
+            {
+                ExtractTar(archivePath, outputPath);
+            }
+            else
+            {
+                await InstallDMGAsync(archivePath, outputPath).ConfigureAwait(false);
+            }
+
+            if (GetCurrentPlatform() == Platform.Linux)
+            {
+                var executables = new[]
+                {
+                    "chrome",
+                    "chrome_crashpad_handler",
+                    "chrome-management-service",
+                    "chrome_sandbox", // setuid
+                    "crashpad_handler",
+                    "google-chrome",
+                    "libvulkan.so.1",
+                    "nacl_helper",
+                    "nacl_helper_bootstrap",
+                    "xdg-mime",
+                    "xdg-settings",
+                    "cron/google-chrome",
+                };
+
+                foreach (var executable in executables)
+                {
+                    var execPath = Path.Combine(outputPath, archiveName, executable);
+
+                    if (File.Exists(execPath))
+                    {
+                        var code = LinuxSysCall.Chmod(execPath, LinuxSysCall.ExecutableFilePermissions);
+
+                        if (code != 0)
+                        {
+                            throw new Exception("Chmod operation failed");
+                        }
+                    }
+                }
             }
         }
     }

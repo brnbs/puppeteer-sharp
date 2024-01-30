@@ -12,7 +12,7 @@ namespace PuppeteerSharp
     /// Represents a Base process and any associated temporary user data directory that have created
     /// by Puppeteer and therefore must be cleaned up when no longer needed.
     /// </summary>
-    public class LauncherBase : IDisposable
+    public abstract class LauncherBase : IDisposable
     {
         private readonly StateManager _stateManager;
 
@@ -23,16 +23,10 @@ namespace PuppeteerSharp
         /// <param name="options">Options for launching Base.</param>
         public LauncherBase(string executable, LaunchOptions options)
         {
-            Options = options ?? throw new ArgumentNullException(nameof(options));
-
             _stateManager = new StateManager();
-            _stateManager.Starting = options.Product switch
-            {
-                Product.Chrome => new ChromiumStartingState(_stateManager),
-                Product.Firefox => new ChromiumStartingState(_stateManager),
-                Product.FirefoxPlaywright => new FirefoxPlaywrightStartingState(_stateManager),
-                _ => throw new ArgumentException("Invalid product"),
-            };
+            _stateManager.Starting = new ProcessStartingState(_stateManager);
+
+            Options = options ?? throw new ArgumentNullException(nameof(options));
 
             Process = new Process
             {
@@ -80,9 +74,9 @@ namespace PuppeteerSharp
         /// </summary>
         public bool HasExited => _stateManager.CurrentState.IsExited;
 
-        internal TaskCompletionSource<bool> ExitCompletionSource { get; } = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource<bool> ExitCompletionSource { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        internal TaskCompletionSource<string> StartCompletionSource { get; } = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource<string> StartCompletionSource { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         internal LaunchOptions Options { get; }
 
@@ -92,6 +86,12 @@ namespace PuppeteerSharp
         /// Gets Base process current state.
         /// </summary>
         internal State CurrentState => _stateManager.CurrentState;
+
+        /// <summary>
+        /// Default build.
+        /// </summary>
+        /// <returns>A tasks that resolves when the build is obtained.</returns>
+        public abstract Task<string> GetDefaultBuildIdAsync();
 
         /// <inheritdoc />
         public void Dispose()

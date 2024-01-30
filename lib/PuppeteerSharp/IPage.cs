@@ -207,7 +207,6 @@ namespace PuppeteerSharp
         /// - <see cref="WaitForNavigationAsync(NavigationOptions)"/>
         /// - <see cref="WaitForRequestAsync(string, WaitForOptions)"/>
         /// - <see cref="WaitForResponseAsync(string, WaitForOptions)"/>
-        /// - <see cref="WaitForXPathAsync(string, WaitForSelectorOptions)"/>
         /// - <see cref="WaitForSelectorAsync(string, WaitForSelectorOptions)"/>
         /// - <see cref="WaitForExpressionAsync(string, WaitForFunctionOptions)"/>.
         /// </summary>
@@ -227,6 +226,7 @@ namespace PuppeteerSharp
         /// <summary>
         /// `true` if drag events are being intercepted, `false` otherwise.
         /// </summary>
+        [Obsolete("We no longer support intercepting drag payloads. Use the new drag APIs found on ElementHandle to drag (or just use the Page.Mouse)")]
         bool IsDragInterceptionEnabled { get; }
 
         /// <summary>
@@ -275,7 +275,7 @@ namespace PuppeteerSharp
         /// <summary>
         /// Gets all workers in the page.
         /// </summary>
-        Worker[] Workers { get; }
+        WebWorker[] Workers { get; }
 
         /// <summary>
         /// Adds a <c><![CDATA[<script>]]></c> tag into the page with the desired url or content.
@@ -944,7 +944,7 @@ namespace PuppeteerSharp
         Task<IResponse> ReloadAsync(NavigationOptions options);
 
         /// <summary>
-        /// Takes a screenshot of the page.
+        /// Captures a screenshot of this <see cref="IPage"/>.
         /// </summary>
         /// <returns>The screenshot task.</returns>
         /// <param name="file">The file path to save the image to. The screenshot type will be inferred from file extension.
@@ -1063,6 +1063,7 @@ namespace PuppeteerSharp
         /// </remarks>
         /// <param name="enabled">Interception enabled.</param>
         /// <returns>A Task that resolves when the message was confirmed by the browser.</returns>
+        [Obsolete("We no longer support intercepting drag payloads. Use the new drag APIs found on ElementHandle to drag (or just use the Page.Mouse)")]
         Task SetDragInterceptionAsync(bool enabled);
 
         /// <summary>
@@ -1097,8 +1098,8 @@ namespace PuppeteerSharp
         Task SetOfflineModeAsync(bool value);
 
         /// <summary>
-        /// Activating request interception enables <see cref="PuppeteerSharp.Request.AbortAsync(RequestAbortErrorCode)">request.AbortAsync</see>,
-        /// <see cref="PuppeteerSharp.Request.ContinueAsync(Payload)">request.ContinueAsync</see> and <see cref="PuppeteerSharp.Request.RespondAsync(ResponseData)">request.RespondAsync</see> methods.
+        /// Activating request interception enables <see cref="PuppeteerSharp.Request.AbortAsync(RequestAbortErrorCode, int?)">request.AbortAsync</see>,
+        /// <see cref="PuppeteerSharp.Request.ContinueAsync(Payload, int?)">request.ContinueAsync</see> and <see cref="PuppeteerSharp.Request.RespondAsync(ResponseData, int?)">request.RespondAsync</see> methods.
         /// </summary>
         /// <returns>The request interception task.</returns>
         /// <param name="value">Whether to enable request interception..</param>
@@ -1226,7 +1227,7 @@ namespace PuppeteerSharp
         /// </example>
         /// <param name="options">Optional waiting parameters.</param>
         /// <returns>A task that resolves after a page requests a file picker.</returns>
-        Task<FileChooser> WaitForFileChooserAsync(WaitForFileChooserOptions options = null);
+        Task<FileChooser> WaitForFileChooserAsync(WaitForOptions options = null);
 
         /// <summary>
         /// Waits for a function to be evaluated to a truthy value.
@@ -1371,7 +1372,6 @@ namespace PuppeteerSharp
         /// <param name="options">Optional waiting parameters.</param>
         /// <returns>A task that resolves when element specified by selector string is added to DOM.
         /// Resolves to `null` if waiting for `hidden: true` and selector is not found in DOM.</returns>
-        /// <seealso cref="WaitForXPathAsync(string, WaitForSelectorOptions)"/>
         /// <seealso cref="IFrame.WaitForSelectorAsync(string, WaitForSelectorOptions)"/>
         Task<IElementHandle> WaitForSelectorAsync(string selector, WaitForSelectorOptions options = null);
 
@@ -1409,7 +1409,7 @@ namespace PuppeteerSharp
         /// </code>
         /// </example>
         /// <seealso cref="WaitForSelectorAsync(string, WaitForSelectorOptions)"/>
-        /// <seealso cref="IFrame.WaitForXPathAsync(string, WaitForSelectorOptions)"/>
+        [Obsolete("Use " + nameof(WaitForSelectorAsync) + " instead")]
         Task<IElementHandle> WaitForXPathAsync(string xpath, WaitForSelectorOptions options = null);
 
         /// <summary>
@@ -1420,7 +1420,37 @@ namespace PuppeteerSharp
         /// <remarks>
         /// Shortcut for <c>page.MainFrame.XPathAsync(expression)</c>.
         /// </remarks>
-        /// <seealso cref="IFrame.XPathAsync(string)"/>
+        [Obsolete("Use " + nameof(QuerySelectorAsync) + " instead")]
         Task<IElementHandle[]> XPathAsync(string expression);
+
+        /// <summary>
+        /// This method is typically coupled with an action that triggers a device
+        /// request from an api such as WebBluetooth.
+        ///
+        /// Caution.
+        ///
+        /// This must be called before the device request is made. It will not return a
+        /// currently active device prompt.
+        /// </summary>
+        /// <example>
+        /// <code source="../PuppeteerSharp.Tests/DeviceRequestPromptTests/WaitForDevicePromptTests.cs" region="IPageWaitForDevicePromptAsyncUsage" lang="csharp"/>
+        /// </example>
+        /// <param name="options">Optional waiting parameters.</param>
+        /// <returns>A task that resolves after the page gets the prompt.</returns>
+        Task<DeviceRequestPrompt> WaitForDevicePromptAsync(WaitForOptions options = null);
+
+        /// <summary>
+        /// <see cref="IRequest.RespondAsync"/>, <see cref="IRequest.AbortAsync"/>, and <see cref="IRequest.ContinueAsync"/> can accept an optional `priority` to activate Cooperative Intercept Mode.
+        /// In Cooperative Mode, all interception tasks are guaranteed to run and all async handlers are awaited.
+        /// The interception is resolved to the highest-priority resolution.
+        /// </summary>
+        /// <param name="interceptionTask">Interception task.</param>
+        void AddRequestInterceptor(Func<IRequest, Task> interceptionTask);
+
+        /// <summary>
+        /// Removes a previously added request interceptor.
+        /// </summary>
+        /// <param name="interceptionTask">Interception task.</param>
+        void RemoveRequestInterceptor(Func<IRequest, Task> interceptionTask);
     }
 }

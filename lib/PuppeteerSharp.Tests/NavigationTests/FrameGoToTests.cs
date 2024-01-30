@@ -1,37 +1,34 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using PuppeteerSharp.Tests.Attributes;
-using PuppeteerSharp.Xunit;
-using Xunit;
-using Xunit.Abstractions;
+using PuppeteerSharp.Nunit;
+using NUnit.Framework;
 
 namespace PuppeteerSharp.Tests.NavigationTests
 {
-    [Collection(TestConstants.TestFixtureCollectionName)]
     public class FrameGoToTests : PuppeteerPageBaseTest
     {
-        public FrameGoToTests(ITestOutputHelper output) : base(output)
+        public FrameGoToTests(): base()
         {
         }
 
         [PuppeteerTest("navigation.spec.ts", "Frame.goto", "should navigate subframes")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldNavigateSubFrames()
         {
             await Page.GoToAsync(TestConstants.ServerUrl + "/frames/one-frame.html");
-            Assert.Single(Page.Frames.Where(f => f.Url.Contains("/frames/one-frame.html")));
-            Assert.Single(Page.Frames.Where(f => f.Url.Contains("/frames/frame.html")));
+            Assert.That(Page.Frames.Where(f => f.Url.Contains("/frames/one-frame.html")), Has.Exactly(1).Items);
+            Assert.That(Page.Frames.Where(f => f.Url.Contains("/frames/frame.html")), Has.Exactly(1).Items);
             var childFrame = Page.FirstChildFrame();
             var response = await childFrame.GoToAsync(TestConstants.EmptyPage);
-            Assert.Equal(HttpStatusCode.OK, response.Status);
-            Assert.Same(response.Frame, childFrame);
+            Assert.AreEqual(HttpStatusCode.OK, response.Status);
+            Assert.AreSame(response.Frame, childFrame);
         }
 
         [PuppeteerTest("navigation.spec.ts", "Frame.goto", "should reject when frame detaches")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldRejectWhenFrameDetaches()
         {
             await Page.GoToAsync(TestConstants.ServerUrl + "/frames/one-frame.html");
@@ -40,12 +37,18 @@ namespace PuppeteerSharp.Tests.NavigationTests
             var navigationTask = Page.FirstChildFrame().GoToAsync(TestConstants.EmptyPage);
             await waitForRequestTask;
             await Page.QuerySelectorAsync("iframe").EvaluateFunctionAsync("frame => frame.remove()");
-            var exception = await Assert.ThrowsAsync<NavigationException>(async () => await navigationTask);
-            Assert.Equal("Navigating frame was detached", exception.Message);
+            var exception = Assert.ThrowsAsync<NavigationException>(async () => await navigationTask);
+            Assert.True(
+                new[]
+                {
+                    "Navigating frame was detached",
+                    "Error: NS_BINDING_ABORTED",
+                    "net::ERR_ABORTED"
+                }.Any(error => exception.Message.Contains(error)));
         }
 
         [PuppeteerTest("navigation.spec.ts", "Frame.goto", "should return matching responses")]
-        [SkipBrowserFact(skipFirefox: true)]
+        [Skip(SkipAttribute.Targets.Firefox)]
         public async Task ShouldReturnMatchingResponses()
         {
             // Disable cache: otherwise, chromium will cache similar requests.
@@ -86,8 +89,8 @@ namespace PuppeteerSharp.Tests.NavigationTests
             {
                 matchingData[i].ServerResponseTcs.TrySetResult(serverResponseTexts[i]);
                 var response = await matchingData[i].NavigationTask;
-                Assert.Same(matchingData[i].FrameTask.Result, response.Frame);
-                Assert.Equal(serverResponseTexts[i], await response.TextAsync());
+                Assert.AreSame(matchingData[i].FrameTask.Result, response.Frame);
+                Assert.AreEqual(serverResponseTexts[i], await response.TextAsync());
             }
         }
 

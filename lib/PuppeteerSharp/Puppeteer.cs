@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using PuppeteerSharp.Mobile;
@@ -41,7 +39,7 @@ namespace PuppeteerSharp
         public static IReadOnlyDictionary<DeviceDescriptorName, DeviceDescriptor> Devices => DeviceDescriptors.ToReadOnly();
 
         /// <summary>
-        /// Returns a list of network conditions to be used with <seealso cref="IPage.EmulateNetworkConditionsAsync(NetworkConditions)"/>.
+        /// Returns a list of network conditions to be used with <seealso cref="IPage.EmulateNetworkConditionsAsync(PuppeteerSharp.NetworkConditions)"/>.
         /// Actual list of conditions can be found in <seealso cref="PredefinedNetworkConditions.Conditions"/>.
         /// </summary>
         /// <example>
@@ -64,9 +62,9 @@ namespace PuppeteerSharp
         /// <returns>Chromium arguments.</returns>
         /// <param name="options">Options.</param>
         public static string[] GetDefaultArgs(LaunchOptions options = null)
-            => (options?.Product ?? Product.Chrome) == Product.Chrome
-                ? ChromiumLauncher.GetDefaultArgs(options ?? new LaunchOptions())
-                : FirefoxLauncher.GetDefaultArgs(options ?? new LaunchOptions());
+            => (options?.Browser ?? SupportedBrowser.Firefox) == SupportedBrowser.Firefox
+                ? FirefoxLauncher.GetDefaultArgs(options ?? new LaunchOptions())
+                : ChromiumLauncher.GetDefaultArgs(options ?? new LaunchOptions());
 
         /// <summary>
         /// The method launches a browser instance with given arguments. The browser will be closed when the Browser is disposed.

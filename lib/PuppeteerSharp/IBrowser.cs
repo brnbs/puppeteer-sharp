@@ -70,7 +70,12 @@ namespace PuppeteerSharp
         IBrowserContext DefaultContext { get; }
 
         /// <summary>
-        /// Dafault wait time in milliseconds. Defaults to 30 seconds.
+        /// Returns the browser type. Chrome, Chromium or Firefox.
+        /// </summary>
+        SupportedBrowser BrowserType { get; }
+
+        /// <summary>
+        /// Default wait time in milliseconds. Defaults to 30 seconds.
         /// </summary>
         int DefaultWaitForTimeout { get; set; }
 
@@ -126,6 +131,7 @@ namespace PuppeteerSharp
         /// <summary>
         /// Creates a new incognito browser context. This won't share cookies/cache with other browser contexts.
         /// </summary>
+        /// <param name="options">Options.</param>
         /// <returns>Task which resolves to a new <see cref="IBrowserContext"/> object.</returns>
         /// <example>
         /// <code>
@@ -142,7 +148,7 @@ namespace PuppeteerSharp
         /// ]]>
         /// </code>
         /// </example>
-        Task<IBrowserContext> CreateIncognitoBrowserContextAsync();
+        Task<IBrowserContext> CreateIncognitoBrowserContextAsync(BrowserContextOptions options = null);
 
         /// <summary>
         /// Disconnects Puppeteer from the browser, but leaves the process running. After calling <see cref="Disconnect"/>, the browser object is considered disposed and cannot be used anymore.
@@ -219,7 +225,7 @@ namespace PuppeteerSharp
         void RegisterCustomQueryHandler(string name, CustomQueryHandler queryHandler);
 
         /// <summary>
-        /// Unregisters a custom query handler.
+        /// Unregister a custom query handler.
         /// </summary>
         /// <param name="name">The name of the query handler to unregistered.</param>
         void UnregisterCustomQueryHandler(string name);

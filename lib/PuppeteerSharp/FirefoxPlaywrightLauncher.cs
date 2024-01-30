@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
+using PuppeteerSharp.BrowserData;
 using PuppeteerSharp.Helpers;
 
 namespace PuppeteerSharp
@@ -32,6 +34,9 @@ namespace PuppeteerSharp
             Process.StartInfo.Arguments = string.Join(" ", firefoxArgs);
             Process.StartInfo.RedirectStandardOutput = true;
         }
+
+        /// <inheritdoc />
+        public override Task<string> GetDefaultBuildIdAsync() => Firefox.GetDefaultBuildIdAsync();
 
         /// <inheritdoc />
         public override string ToString() => $"FirefoxPlaywright process; EndPoint={EndPoint}; State={CurrentState}";
