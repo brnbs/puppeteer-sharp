@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace PuppeteerSharp.States
 {
-    internal class ProcessStartingState : State
+    internal class FirefoxPlaywrightProcessStartingState : State
     {
-        public ProcessStartingState(StateManager stateManager) : base(stateManager)
+        public FirefoxPlaywrightProcessStartingState(StateManager stateManager) : base(stateManager)
         {
         }
 
@@ -46,7 +46,7 @@ namespace PuppeteerSharp.States
                 if (e.Data != null)
                 {
                     output.AppendLine(e.Data);
-                    var match = Regex.Match(e.Data, "^DevTools listening on (ws:\\/\\/.*)");
+                    var match = Regex.Match(e.Data, "^Juggler listening on (ws:\\/\\/.*)");
                     if (match.Success)
                     {
                         p.StartCompletionSource.TrySetResult(match.Groups[1].Value);
@@ -60,6 +60,7 @@ namespace PuppeteerSharp.States
             void OnProcessExited(object sender, EventArgs e) => StateManager.Exited.EnterFrom(p, StateManager.CurrentState);
 
             p.Process.ErrorDataReceived += OnProcessDataReceivedWhileStarting;
+            p.Process.OutputDataReceived += OnProcessDataReceivedWhileStarting;
             p.Process.Exited += OnProcessExitedWhileStarting;
             p.Process.Exited += OnProcessExited;
             CancellationTokenSource cts = null;
@@ -69,6 +70,7 @@ namespace PuppeteerSharp.States
                 await StateManager.Started.EnterFromAsync(p, this).ConfigureAwait(false);
 
                 p.Process.BeginErrorReadLine();
+                p.Process.BeginOutputReadLine();
 
                 var timeout = p.Options.Timeout;
                 if (timeout > 0)
@@ -94,6 +96,7 @@ namespace PuppeteerSharp.States
                 cts?.Dispose();
                 p.Process.Exited -= OnProcessExitedWhileStarting;
                 p.Process.ErrorDataReceived -= OnProcessDataReceivedWhileStarting;
+                p.Process.OutputDataReceived -= OnProcessDataReceivedWhileStarting;
             }
         }
     }

@@ -23,10 +23,14 @@ namespace PuppeteerSharp
         /// <param name="options">Options for launching Base.</param>
         public LauncherBase(string executable, LaunchOptions options)
         {
-            _stateManager = new StateManager();
-            _stateManager.Starting = new ProcessStartingState(_stateManager);
-
             Options = options ?? throw new ArgumentNullException(nameof(options));
+
+            _stateManager = new StateManager();
+            _stateManager.Starting = Options.Browser switch
+            {
+                SupportedBrowser.FirefoxPlaywright => new FirefoxPlaywrightProcessStartingState(_stateManager),
+                _ => new ProcessStartingState(_stateManager),
+            };
 
             Process = new Process
             {
