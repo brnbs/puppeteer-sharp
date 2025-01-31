@@ -175,3 +175,9 @@ And a huge thanks to everyone who sponsors this project through [Github sponsors
 <!-- sponsors --><a href="https://github.com/tolgabalci"><img src="https://github.com/tolgabalci.png" width="60px" alt="Tolga Balci" /></a><a href="https://github.com/nogginbox"><img src="https://github.com/nogginbox.png" width="60px" alt="Richard Garside" /></a><a href="https://github.com/aws"><img src="https://github.com/aws.png" width="60px" alt="Amazon Web Services" /></a><a href="https://github.com/MarkPflug"><img src="https://github.com/MarkPflug.png" width="60px" alt="Mark Pflug" /></a><!-- sponsors -->
 
 
+## Building a NuGet package for Outis Nemo
+
+```
+dotnet build --configuration Release .\lib\PuppeteerSharp\PuppeteerSharp.csproj
+dotnet pack -c Release -p:PackageVersion=10.0.0-$(Get-Date -Format "yyyyMMdd") .\lib\PuppeteerSharp\PuppeteerSharp.csproj
+```
