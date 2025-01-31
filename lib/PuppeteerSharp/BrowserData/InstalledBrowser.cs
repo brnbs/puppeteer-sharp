@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 
 namespace PuppeteerSharp.BrowserData
@@ -9,14 +8,6 @@ namespace PuppeteerSharp.BrowserData
     /// </summary>
     public class InstalledBrowser
     {
-        private static readonly Dictionary<SupportedBrowser, Func<Platform, string, string>> _executablePathByBrowser = new()
-        {
-            [SupportedBrowser.Chrome] = Chrome.RelativeExecutablePath,
-            [SupportedBrowser.ChromeHeadlessShell] = ChromeHeadlessShell.RelativeExecutablePath,
-            [SupportedBrowser.Chromium] = Chromium.RelativeExecutablePath,
-            [SupportedBrowser.Firefox] = Firefox.RelativeExecutablePath,
-        };
-
         /// <summary>
         /// Initializes a new instance of the <see cref="InstalledBrowser"/> class.
         /// </summary>
@@ -48,6 +39,14 @@ namespace PuppeteerSharp.BrowserData
         public Platform Platform { get; set; }
 
         /// <summary>
+        /// Whether the permissions have been fixed in the browser.
+        /// If Puppeteer executed the command to fix the permissions, this will be true.
+        /// If Puppeteer failed to fix the permissions, this will be false.
+        /// If the platform does not require permissions to be fixed, this will be null.
+        /// </summary>
+        public bool? PermissionsFixed { get; internal set; }
+
+        /// <summary>
         /// Revision platform.
         /// </summary>
         internal Cache Cache { get; set; }
@@ -62,7 +61,16 @@ namespace PuppeteerSharp.BrowserData
             var installationDir = Cache.GetInstallationDir(Browser, Platform, BuildId);
             return Path.Combine(
                 installationDir,
-                _executablePathByBrowser[Browser](Platform, BuildId));
+                GetExecutablePath(Browser, Platform, BuildId));
         }
+
+        private static string GetExecutablePath(SupportedBrowser browser, Platform platform, string buildId) => browser switch
+        {
+            SupportedBrowser.Chrome => Chrome.RelativeExecutablePath(platform, buildId),
+            SupportedBrowser.ChromeHeadlessShell => ChromeHeadlessShell.RelativeExecutablePath(platform, buildId),
+            SupportedBrowser.Chromium => Chromium.RelativeExecutablePath(platform, buildId),
+            SupportedBrowser.Firefox => Firefox.RelativeExecutablePath(platform, buildId),
+            _ => throw new NotSupportedException(),
+        };
     }
 }
